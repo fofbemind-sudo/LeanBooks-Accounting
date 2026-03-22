@@ -1,4 +1,6 @@
 import express from "express";
+import { authMiddleware } from "./middleware/auth";
+import { businessOwnershipMiddleware } from "./middleware/business";
 import transactionsRouter from "./routes/transactions";
 import reportsRouter from "./routes/reports";
 import payrollRouter from "./routes/payroll";
@@ -12,12 +14,14 @@ const app = express();
 app.use(express.json());
 
 // API Routes
-app.use("/api/transactions", transactionsRouter);
-app.use("/api/reports", reportsRouter);
-app.use("/api/payroll", payrollRouter);
-app.use("/api/employees", employeesRouter);
-app.use("/api/accounts", accountsRouter);
-app.use("/api/integrations", integrationsRouter);
-app.use("/api/businesses", businessesRouter);
+app.use("/api/businesses", authMiddleware, businessesRouter);
+
+// All other API routes require business ownership
+app.use("/api/transactions", authMiddleware, businessOwnershipMiddleware, transactionsRouter);
+app.use("/api/reports", authMiddleware, businessOwnershipMiddleware, reportsRouter);
+app.use("/api/payroll", authMiddleware, businessOwnershipMiddleware, payrollRouter);
+app.use("/api/employees", authMiddleware, businessOwnershipMiddleware, employeesRouter);
+app.use("/api/accounts", authMiddleware, businessOwnershipMiddleware, accountsRouter);
+app.use("/api/integrations", authMiddleware, businessOwnershipMiddleware, integrationsRouter);
 
 export default app;

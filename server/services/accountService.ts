@@ -31,10 +31,17 @@ export class AccountService {
       { code: "5999", name: "Misc Expense", type: "Expense", subtype: "Operating Expense", isSystem: true },
     ];
 
+    const existingAccountsSnapshot = await db.collection("accounts")
+      .where("businessId", "==", businessId)
+      .get();
+    
+    const existingCodes = new Set(existingAccountsSnapshot.docs.map(doc => doc.data().code));
     const batch = db.batch();
-    const results = [];
+    const results: any[] = [];
 
     for (const acc of defaultAccounts) {
+      if (existingCodes.has(acc.code)) continue;
+
       const ref = db.collection("accounts").doc();
       const account: Partial<Account> = {
         ...acc,
@@ -48,7 +55,10 @@ export class AccountService {
       results.push(account);
     }
 
-    await batch.commit();
+    if (results.length > 0) {
+      await batch.commit();
+    }
+    
     return results;
   }
 }

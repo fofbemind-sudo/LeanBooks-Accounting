@@ -31,6 +31,12 @@ export const PayrollPage = () => {
   const [periodStart, setPeriodStart] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [periodEnd, setPeriodEnd] = useState(format(endOfMonth(new Date()), "yyyy-MM-dd"));
   const [hourlyInputs, setHourlyInputs] = useState<Record<string, number>>({});
+  const [preview, setPreview] = useState<{
+    items: any[];
+    totalGross: number;
+    totalTaxes: number;
+    totalNet: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!business) return;
@@ -50,6 +56,47 @@ export const PayrollPage = () => {
     };
     fetchData();
   }, [business]);
+
+  const calculatePreview = () => {
+    let totalGross = 0;
+    let totalTaxes = 0;
+    let totalNet = 0;
+
+    const items = employees.map(emp => {
+      let gross = 0;
+      if (emp.payType === "Salary") {
+        gross = emp.payRate / 12; // Monthly
+      } else {
+        const hours = hourlyInputs[emp.id] || 160;
+        gross = emp.payRate * hours;
+      }
+
+      const taxes = gross * 0.15; // 15% tax estimate
+      const net = gross - taxes;
+
+      totalGross += gross;
+      totalTaxes += taxes;
+      totalNet += net;
+
+      return {
+        employeeId: emp.id,
+        name: emp.name,
+        gross,
+        taxes,
+        net
+      };
+    });
+
+    setPreview({ items, totalGross, totalTaxes, totalNet });
+  };
+
+  useEffect(() => {
+    if (isRunModalOpen) {
+      calculatePreview();
+    } else {
+      setPreview(null);
+    }
+  }, [isRunModalOpen, hourlyInputs, employees]);
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,7 +284,7 @@ export const PayrollPage = () => {
       </Modal>
 
       <Modal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} title="Process Payroll">
-        <div className="space-y-6">
+        <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Period Start</label>
@@ -258,7 +305,7 @@ export const PayrollPage = () => {
                   type="number" 
                   className="w-24" 
                   value={hourlyInputs[emp.id] || ""} 
-                  onChange={(e) => setHourlyInputs({...hourlyInputs, [emp.id]: parseFloat(e.target.value)})}
+                  onChange={(e) => setHourlyInputs({...hourlyInputs, [emp.id]: parseFloat(e.target.value) || 0})}
                   placeholder="160"
                 />
               </div>
@@ -268,9 +315,39 @@ export const PayrollPage = () => {
             )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          {preview && (
+            <div className="space-y-4 border-t pt-4">
+              <h4 className="font-bold text-slate-900 text-sm">Payroll Preview</h4>
+              <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total Gross Pay</span>
+                  <span className="font-bold text-slate-900">${preview.totalGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Estimated Taxes (15%)</span>
+                  <span className="font-bold text-red-600">-${preview.totalTaxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="border-t pt-2 flex justify-between font-bold text-slate-900">
+                  <span>Total Net Pay</span>
+                  <span>${preview.totalNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Employee Breakdown</div>
+              <div className="space-y-2">
+                {preview.items.map(item => (
+                  <div key={item.employeeId} className="flex justify-between text-xs">
+                    <span className="text-slate-600">{item.name}</span>
+                    <span className="font-medium text-slate-900">${item.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4 border-t sticky bottom-0 bg-white pb-2">
             <Button variant="outline" onClick={() => setIsRunModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleRunPayroll} disabled={loading}>
+            <Button onClick={handleRunPayroll} disabled={loading || employees.length === 0}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
               Confirm & Process
             </Button>

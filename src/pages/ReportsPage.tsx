@@ -83,7 +83,7 @@ export const ReportsPage = () => {
           <div className="space-y-6">
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Revenue</h4>
-              {pnl?.revenueAccounts?.map((acc: any) => (
+              {pnl?.lineItems?.revenue?.map((acc: any) => (
                 <div key={acc.name} className="flex justify-between items-center py-2 border-b border-slate-50">
                   <span className="text-slate-600">{acc.name}</span>
                   <span className="font-medium text-slate-900">${acc.balance.toLocaleString()}</span>
@@ -91,13 +91,13 @@ export const ReportsPage = () => {
               ))}
               <div className="flex justify-between items-center py-3 font-bold text-emerald-600">
                 <span>Total Revenue</span>
-                <span>${pnl?.revenue?.toLocaleString()}</span>
+                <span>${pnl?.totals?.revenue?.toLocaleString()}</span>
               </div>
             </div>
 
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Expenses</h4>
-              {pnl?.expenseAccounts?.map((acc: any) => (
+              {pnl?.lineItems?.expenses?.map((acc: any) => (
                 <div key={acc.name} className="flex justify-between items-center py-2 border-b border-slate-50">
                   <span className="text-slate-600">{acc.name}</span>
                   <span className="font-medium text-slate-900">${acc.balance.toLocaleString()}</span>
@@ -105,14 +105,14 @@ export const ReportsPage = () => {
               ))}
               <div className="flex justify-between items-center py-3 font-bold text-rose-600">
                 <span>Total Expenses</span>
-                <span>(${pnl?.expenses?.toLocaleString()})</span>
+                <span>(${pnl?.totals?.expenses?.toLocaleString()})</span>
               </div>
             </div>
 
             <div className="pt-4 border-t-2 border-slate-100 flex justify-between items-center">
               <span className="text-lg font-black text-slate-900">Net Income</span>
-              <span className={cn("text-2xl font-black", pnl?.netIncome >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                ${pnl?.netIncome?.toLocaleString()}
+              <span className={cn("text-2xl font-black", pnl?.totals?.netIncome >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                ${pnl?.totals?.netIncome?.toLocaleString()}
               </span>
             </div>
           </div>
@@ -123,7 +123,7 @@ export const ReportsPage = () => {
           <div className="space-y-8">
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assets</h4>
-              {bs?.Assets?.map((acc: any) => (
+              {bs?.lineItems?.assets?.map((acc: any) => (
                 <div key={acc.name} className="flex justify-between items-center py-2 border-b border-slate-50">
                   <span className="text-slate-600">{acc.name}</span>
                   <span className="font-medium text-slate-900">${acc.balance.toLocaleString()}</span>
@@ -137,7 +137,7 @@ export const ReportsPage = () => {
 
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Liabilities</h4>
-              {bs?.Liabilities?.map((acc: any) => (
+              {bs?.lineItems?.liabilities?.map((acc: any) => (
                 <div key={acc.name} className="flex justify-between items-center py-2 border-b border-slate-50">
                   <span className="text-slate-600">{acc.name}</span>
                   <span className="font-medium text-slate-900">${acc.balance.toLocaleString()}</span>
@@ -151,7 +151,7 @@ export const ReportsPage = () => {
 
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Equity</h4>
-              {bs?.Equity?.map((acc: any) => (
+              {bs?.lineItems?.equity?.map((acc: any) => (
                 <div key={acc.name} className="flex justify-between items-center py-2 border-b border-slate-50">
                   <span className="text-slate-600">{acc.name}</span>
                   <span className="font-medium text-slate-900">${acc.balance.toLocaleString()}</span>

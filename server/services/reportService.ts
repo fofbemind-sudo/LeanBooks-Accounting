@@ -28,7 +28,8 @@ export class ReportService {
       const entry = doc.data();
       const accountId = entry.accountId;
       if (!accountBalances[accountId]) accountBalances[accountId] = 0;
-      accountBalances[accountId] += (entry.credit - entry.debit); // Revenue/Expense usually credit-based
+      // For P&L, we usually look at the net change in the period
+      accountBalances[accountId] += (entry.credit - entry.debit);
     });
 
     accountsMap.forEach((account, id) => {
@@ -43,7 +44,11 @@ export class ReportService {
       }
     });
 
-    return { revenue, expenses, netIncome: revenue - expenses, revenueAccounts, expenseAccounts };
+    return { 
+      metadata: { businessId, startDate, endDate, reportType: "Profit & Loss" },
+      lineItems: { revenue: revenueAccounts, expenses: expenseAccounts },
+      totals: { revenue, expenses, netIncome: revenue - expenses }
+    };
   }
 
   static async getBalanceSheet(businessId: string, asOfDate: Date) {
@@ -56,7 +61,12 @@ export class ReportService {
 
     const balances = await LedgerService.getAccountBalances(businessId, asOfDate);
 
-    const report: any = { Assets: [], Liabilities: [], Equity: [], totals: { Assets: 0, Liabilities: 0, Equity: 0 } };
+    const report: any = { 
+      Assets: [], 
+      Liabilities: [], 
+      Equity: [], 
+      totals: { Assets: 0, Liabilities: 0, Equity: 0 } 
+    };
 
     accountsMap.forEach((account, id) => {
       const balance = balances[id] || 0;
@@ -74,7 +84,43 @@ export class ReportService {
       }
     });
 
-    return report;
+    // Calculate Net Income from inception to asOfDate to balance the sheet
+    // This represents Retained Earnings + Current Net Income
+    const pnl = await this.getProfitAndLoss(businessId, new Date(0), asOfDate);
+    const netIncome = pnl.totals.netIncome;
+
+    report.Equity.push({ name: "Retained Earnings / Net Income", balance: netIncome });
+    report.totals.Equity += netIncome;
+
+    return {
+      metadata: { businessId, asOfDate, reportType: "Balance Sheet" },
+      lineItems: { assets: report.Assets, liabilities: report.Liabilities, equity: report.Equity },
+      totals: report.totals
+    };
+  }
+
+  static async getCashBalance(businessId: string, asOfDate: Date) {
+    const accountsSnapshot = await db.collection("accounts")
+      .where("businessId", "==", businessId)
+      .get();
+    
+    const cashEquivalentSubtypes = ["Bank", "Cash", "Clearing"];
+    const cashAccountIds: string[] = [];
+    
+    accountsSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (cashEquivalentSubtypes.includes(data.subtype)) {
+        cashAccountIds.push(doc.id);
+      }
+    });
+
+    const balances = await LedgerService.getAccountBalances(businessId, asOfDate);
+    let totalCash = 0;
+    cashAccountIds.forEach(id => {
+      totalCash += (balances[id] || 0);
+    });
+
+    return { totalCash };
   }
 
   static async getCashFlow(businessId: string, startDate: Date, endDate: Date) {

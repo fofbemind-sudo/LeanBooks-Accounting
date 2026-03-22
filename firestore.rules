@@ -2,26 +2,108 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper functions
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isBusinessOwner(businessId) {
-      return isAuthenticated() && get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid;
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Business rules
+    function isBusinessOwner(businessId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidString(field, maxLen) {
+      return request.resource.data[field] is string && request.resource.data[field].size() <= maxLen;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Businesses
     match /businesses/{businessId} {
       allow read, update, delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+        request.resource.data.ownerId == request.auth.uid &&
+        hasRequiredFields(['name', 'ownerId']) &&
+        isValidString('name', 100);
     }
 
-    // Generic rule for business-scoped collections
-    match /{collectionName}/{docId} {
-      allow read, write: if isAuthenticated() && 
-        (request.resource.data.businessId != null && isBusinessOwner(request.resource.data.businessId)) ||
-        (resource != null && resource.data.businessId != null && isBusinessOwner(resource.data.businessId));
+    // Accounts
+    match /accounts/{accountId} {
+      allow read: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+      allow create: if isAuthenticated() && 
+        isBusinessOwner(request.resource.data.businessId) &&
+        hasRequiredFields(['businessId', 'name', 'type', 'code']) &&
+        isValidString('name', 100) &&
+        isValidString('type', 50);
+      allow update, delete: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+    }
+
+    // Transactions
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+      allow create: if isAuthenticated() && 
+        isBusinessOwner(request.resource.data.businessId) &&
+        hasRequiredFields(['businessId', 'date', 'description', 'type']) &&
+        isValidString('description', 500);
+      allow update, delete: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+    }
+
+    // Entries
+    match /entries/{entryId} {
+      allow read: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+      allow create: if isAuthenticated() && 
+        isBusinessOwner(request.resource.data.businessId) &&
+        hasRequiredFields(['businessId', 'transactionId', 'accountId', 'debit', 'credit']);
+      allow update, delete: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+    }
+
+    // Employees
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+      allow create: if isAuthenticated() && 
+        isBusinessOwner(request.resource.data.businessId) &&
+        hasRequiredFields(['businessId', 'name', 'payType', 'payRate']);
+      allow update, delete: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+    }
+
+    // Payroll Runs
+    match /payroll_runs/{runId} {
+      allow read: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+      allow create: if isAuthenticated() && 
+        isBusinessOwner(request.resource.data.businessId) &&
+        hasRequiredFields(['businessId', 'periodStart', 'periodEnd', 'totalGross', 'totalNet']);
+      allow update, delete: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+    }
+
+    // Bank Transactions
+    match /bank_transactions/{bankTxId} {
+      allow read: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+      allow create: if isAuthenticated() && 
+        isBusinessOwner(request.resource.data.businessId) &&
+        hasRequiredFields(['businessId', 'date', 'amount', 'description']);
+      allow update, delete: if isAuthenticated() && isBusinessOwner(resource.data.businessId);
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

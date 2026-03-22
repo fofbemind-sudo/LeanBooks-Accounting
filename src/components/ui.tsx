@@ -73,7 +73,7 @@ export const Select = ({ children, className, ...props }: React.SelectHTMLAttrib
   </select>
 );
 
-export const Badge = ({ children, variant = "neutral" }: { children: React.ReactNode; variant?: "success" | "warning" | "error" | "neutral" | "indigo" }) => {
+export const Badge = ({ children, variant = "neutral", className }: { children: React.ReactNode; variant?: "success" | "warning" | "error" | "neutral" | "indigo"; className?: string }) => {
   const variants = {
     success: "bg-emerald-50 text-emerald-700 border-emerald-100",
     warning: "bg-amber-50 text-amber-700 border-amber-100",
@@ -82,7 +82,7 @@ export const Badge = ({ children, variant = "neutral" }: { children: React.React
     indigo: "bg-indigo-50 text-indigo-700 border-indigo-100",
   };
   return (
-    <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", variants[variant])}>
+    <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", variants[variant], className)}>
       {children}
     </span>
   );

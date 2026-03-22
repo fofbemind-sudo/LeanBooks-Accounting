@@ -39,17 +39,17 @@ export const DashboardPage = () => {
         const start = startOfMonth(new Date()).toISOString();
         const end = endOfMonth(new Date()).toISOString();
         
-        const [pnl, bs, txs, bankTxs] = await Promise.all([
+        const [pnl, cashData, txs, bankTxs] = await Promise.all([
           api.getPnL(business.id, start, end),
-          api.getBalanceSheet(business.id, end),
+          api.getCashBalance(business.id, end),
           api.getTransactions(business.id),
           api.getBankTransactions(business.id)
         ]);
 
         setStats({
-          revenue: pnl.revenue || 0,
-          expenses: pnl.expenses || 0,
-          cash: bs.totals?.Assets || 0,
+          revenue: pnl.totals?.revenue || 0,
+          expenses: pnl.totals?.expenses || 0,
+          cash: cashData.totalCash || 0,
           unmatchedCount: bankTxs.filter(t => t.status === "unmatched").length
         });
 
