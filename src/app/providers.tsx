@@ -29,7 +29,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const refreshBusiness = async () => {
     if (!user) return;
     try {
-      const businesses = await api.getBusinesses(user.uid);
+      const businesses = await api.getBusinesses();
       if (businesses.length > 0) {
         setBusiness(businesses[0]);
       } else {
@@ -46,7 +46,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
       if (u) {
         // Fetch user's business
         try {
-          const businesses = await api.getBusinesses(u.uid);
+          const businesses = await api.getBusinesses();
           if (businesses.length > 0) {
             setBusiness(businesses[0]);
           }

@@ -57,37 +57,18 @@ export const PayrollPage = () => {
     fetchData();
   }, [business]);
 
-  const calculatePreview = () => {
-    let totalGross = 0;
-    let totalTaxes = 0;
-    let totalNet = 0;
-
-    const items = employees.map(emp => {
-      let gross = 0;
-      if (emp.payType === "Salary") {
-        gross = emp.payRate / 12; // Monthly
-      } else {
-        const hours = hourlyInputs[emp.id] || 160;
-        gross = emp.payRate * hours;
-      }
-
-      const taxes = gross * 0.15; // 15% tax estimate
-      const net = gross - taxes;
-
-      totalGross += gross;
-      totalTaxes += taxes;
-      totalNet += net;
-
-      return {
+  const calculatePreview = async () => {
+    if (!business) return;
+    try {
+      const employeeInputs = employees.map(emp => ({
         employeeId: emp.id,
-        name: emp.name,
-        gross,
-        taxes,
-        net
-      };
-    });
-
-    setPreview({ items, totalGross, totalTaxes, totalNet });
+        hours: hourlyInputs[emp.id] || 160
+      }));
+      const data = await api.getPayrollPreview(business.id, employeeInputs);
+      setPreview(data);
+    } catch (error) {
+      console.error("Error fetching payroll preview:", error);
+    }
   };
 
   useEffect(() => {
@@ -324,8 +305,8 @@ export const PayrollPage = () => {
                   <span className="font-bold text-slate-900">${preview.totalGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Estimated Taxes (15%)</span>
-                  <span className="font-bold text-red-600">-${preview.totalTaxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-slate-500">Estimated Deductions</span>
+                  <span className="font-bold text-red-600">-${preview.totalDeductions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between font-bold text-slate-900">
                   <span>Total Net Pay</span>

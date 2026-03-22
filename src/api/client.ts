@@ -13,8 +13,8 @@ const getHeaders = async () => {
 
 export const api = {
   // Businesses
-  getBusinesses: async (ownerId: string): Promise<Business[]> => 
-    fetch(`${API_BASE}/businesses?ownerId=${ownerId}`, {
+  getBusinesses: async (): Promise<Business[]> => 
+    fetch(`${API_BASE}/businesses`, {
       headers: await getHeaders()
     }).then(r => r.json()),
   createBusiness: async (data: Partial<Business>): Promise<Business> =>
@@ -64,6 +64,12 @@ export const api = {
   getPayrollRuns: async (businessId: string): Promise<PayrollRun[]> =>
     fetch(`${API_BASE}/payroll/runs?businessId=${businessId}`, {
       headers: await getHeaders()
+    }).then(r => r.json()),
+  getPayrollPreview: async (businessId: string, employeeInputs: any[]): Promise<any> =>
+    fetch(`${API_BASE}/payroll/preview`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify({ businessId, employeeInputs })
     }).then(r => r.json()),
   runPayroll: async (data: any): Promise<PayrollRun> =>
     fetch(`${API_BASE}/payroll/run`, {

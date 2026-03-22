@@ -3,6 +3,47 @@ import { LedgerService } from "./ledgerService";
 import { Employee, PayrollRun, PayrollRunItem } from "../types/payroll";
 
 export class PayrollService {
+  static async getPayrollPreview(
+    businessId: string,
+    employeeInputs: any[] = []
+  ) {
+    const employeesSnapshot = await db.collection("employees")
+      .where("businessId", "==", businessId)
+      .where("status", "==", "Active")
+      .get();
+
+    const items: any[] = [];
+    let totalGross = 0;
+    let totalDeductions = 0;
+    let totalNet = 0;
+
+    employeesSnapshot.forEach(doc => {
+      const employee = doc.data() as Employee;
+      const input = employeeInputs.find(i => i.employeeId === doc.id);
+      
+      let gross = 0;
+      let hours = 0;
+      
+      if (employee.payType === "Salary") {
+        gross = employee.payRate / 12;
+      } else {
+        hours = input?.hours || employee.defaultHours || 160;
+        gross = hours * employee.payRate;
+      }
+
+      const deductions = gross * (employee.deductionRate || 0.2);
+      const net = gross - deductions;
+
+      totalGross += gross;
+      totalDeductions += deductions;
+      totalNet += net;
+
+      items.push({ employeeId: doc.id, name: employee.name, hours, gross, deductions, net });
+    });
+
+    return { items, totalGross, totalDeductions, totalNet };
+  }
+
   static async runPayroll(
     businessId: string,
     periodStart: Date,

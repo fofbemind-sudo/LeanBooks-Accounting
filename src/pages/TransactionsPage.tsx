@@ -300,8 +300,8 @@ export const TransactionsPage = () => {
                       </td>
                       <td className="px-6 py-4">
                         {btx.status === "unmatched" ? (
-                          <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700">
-                            Match Manually
+                          <Button variant="ghost" size="sm" className="text-slate-400 cursor-not-allowed" disabled>
+                            Manual Match (Coming Soon)
                           </Button>
                         ) : (
                           <span className="text-xs text-slate-400">Linked to {btx.transactionId?.slice(0, 8)}</span>

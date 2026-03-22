@@ -27,6 +27,7 @@ export interface Transaction {
   businessId: string;
   date: any;
   description: string;
+  type?: string;
   source: "manual" | "stripe" | "bank" | "payroll" | "adjustment";
   sourceRef?: string;
   amount: number;

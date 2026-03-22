@@ -79,6 +79,106 @@ LeanBooks uses a multi-layered security approach:
 - **Retained Earnings**: Automatically calculated on the Balance Sheet as the sum of all historical Net Income (Revenue - Expenses).
 - **Idempotency**: Business initialization is idempotent, ensuring default accounts are only created once.
 
+## Folder Structure
+
+```text
+/
+├── server/               # Backend (Express + Node.js)
+│   ├── controllers/      # Route handlers
+│   ├── lib/              # Shared libraries (Firestore, Firebase Admin)
+│   ├── middleware/       # Auth and Business Ownership checks
+│   ├── routes/           # API route definitions
+│   ├── services/         # Core business logic (Ledger, Payroll, Reports)
+│   └── types/            # Backend TypeScript interfaces
+├── src/                  # Frontend (React + Vite)
+│   ├── api/              # API client (fetch wrappers)
+│   ├── app/              # Context providers
+│   ├── components/       # Reusable UI components
+│   ├── pages/            # Main application views
+│   └── types/            # Frontend TypeScript interfaces
+└── firestore.rules       # Security rules for direct database access
+```
+
+## API Endpoint Summary
+
+### Businesses
+- `POST /api/businesses`: Create a new business (ownerId derived from auth).
+- `GET /api/businesses`: List businesses owned by the authenticated user.
+
+### Accounts
+- `GET /api/accounts?businessId=...`: List accounts for a business.
+
+### Transactions
+- `POST /api/transactions`: Create a balanced journal entry.
+- `GET /api/transactions?businessId=...`: List ledger transactions.
+
+### Employees & Payroll
+- `POST /api/employees`: Add a new employee.
+- `GET /api/employees?businessId=...`: List employees.
+- `POST /api/payroll/preview`: Get calculated payroll amounts before processing.
+- `POST /api/payroll/run`: Process payroll and post journal entries.
+- `GET /api/payroll/runs?businessId=...`: List payroll history.
+
+### Reports
+- `GET /api/reports/pnl`: Profit & Loss report.
+- `GET /api/reports/balance-sheet`: Balance Sheet report.
+- `GET /api/reports/cash-balance`: Current cash-on-hand metric.
+
+### Integrations
+- `POST /api/integrations/stripe/mock-sync`: Simulate Stripe payout sync.
+- `POST /api/integrations/bank/mock-sync`: Simulate bank transaction import.
+- `POST /api/integrations/reconciliation/auto-match`: Automatically link bank items to ledger.
+
+## Firestore Document Models
+
+### `businesses`
+```json
+{
+  "id": "string",
+  "ownerId": "string (uid)",
+  "name": "string",
+  "currency": "string",
+  "createdAt": "timestamp"
+}
+```
+
+### `accounts`
+```json
+{
+  "id": "string",
+  "businessId": "string",
+  "name": "string",
+  "type": "Asset|Liability|Equity|Revenue|Expense",
+  "code": "string (e.g. 1000)"
+}
+```
+
+### `transactions`
+```json
+{
+  "id": "string",
+  "businessId": "string",
+  "date": "timestamp",
+  "description": "string",
+  "amount": "number",
+  "type": "Income|Expense|Transfer|Adjustment",
+  "source": "manual|payroll|stripe|bank",
+  "status": "posted|matched"
+}
+```
+
+## Sample Test Workflow
+
+1. **Sign In**: Use the Google Login button to authenticate.
+2. **Create Business**: Add your first business (e.g., "My Startup").
+3. **Initialize Accounts**: Go to Settings (or wait for auto-init) to seed the Chart of Accounts.
+4. **Add Employee**: In the Payroll tab, add an employee with a salary or hourly rate.
+5. **Run Payroll**: Process a payroll run for the current month. Verify the "Payroll History" and the resulting ledger entries.
+6. **Sync Mock Stripe**: Use the "Sync Stripe" button in Settings to simulate revenue and fee entries.
+7. **Sync Mock Bank**: Use "Import Bank Transactions" in the Transactions tab.
+8. **Auto-Match**: Click "Auto-Match" to link bank transactions to ledger entries.
+9. **Review Reports**: Check the Dashboard and Reports page to see the updated P&L and Balance Sheet.
+
 ## License
 
 MIT

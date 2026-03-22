@@ -1,9 +1,16 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { db, Timestamp } from "../lib/firestore";
+import { AuthenticatedRequest } from "../middleware/auth";
 
 export class EmployeeController {
-  static async create(req: Request, res: Response) {
+  static async create(req: AuthenticatedRequest, res: Response) {
     const { businessId, name, payType, payRate, defaultHours, deductionRate } = req.body;
+    
+    if (!businessId) return res.status(400).json({ error: "businessId is required" });
+    if (!name) return res.status(400).json({ error: "Employee name is required" });
+    if (!["Salary", "Hourly"].includes(payType)) return res.status(400).json({ error: "Pay type must be Salary or Hourly" });
+    if (typeof payRate !== "number" || payRate <= 0) return res.status(400).json({ error: "Pay rate must be a positive number" });
+
     try {
       const ref = db.collection("employees").doc();
       const employee = {
@@ -25,8 +32,10 @@ export class EmployeeController {
     }
   }
 
-  static async list(req: Request, res: Response) {
+  static async list(req: AuthenticatedRequest, res: Response) {
     const { businessId } = req.query;
+    if (!businessId) return res.status(400).json({ error: "businessId is required" });
+
     try {
       const snapshot = await db.collection("employees")
         .where("businessId", "==", businessId)

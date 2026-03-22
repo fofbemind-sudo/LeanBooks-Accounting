@@ -1,11 +1,22 @@
-import { Router, Request, Response } from "express";
+import { Router, Response, Request } from "express";
 import { db, Timestamp } from "../lib/firestore";
 import { AccountService } from "../services/accountService";
+import { AuthenticatedRequest } from "../middleware/auth";
 
 const router = Router();
 
-router.post("/", async (req: Request, res: Response) => {
-  const { ownerId, name, currency } = req.body;
+router.post("/", async (req: AuthenticatedRequest, res: Response) => {
+  const { name, currency } = req.body;
+  const ownerId = req.user?.uid;
+
+  if (!ownerId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  if (!name) {
+    return res.status(400).json({ error: "Business name is required" });
+  }
+
   try {
     const ref = db.collection("businesses").doc();
     const business = {
@@ -27,8 +38,13 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/", async (req: Request, res: Response) => {
-  const { ownerId } = req.query;
+router.get("/", async (req: AuthenticatedRequest, res: Response) => {
+  const ownerId = req.user?.uid;
+
+  if (!ownerId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   try {
     const snapshot = await db.collection("businesses")
       .where("ownerId", "==", ownerId)
@@ -40,8 +56,10 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/initialize", async (req: Request, res: Response) => {
+router.post("/initialize", async (req: AuthenticatedRequest, res: Response) => {
   const { businessId } = req.body;
+  if (!businessId) return res.status(400).json({ error: "businessId is required" });
+  
   try {
     const accounts = await AccountService.initializeBusiness(businessId);
     res.json(accounts);
