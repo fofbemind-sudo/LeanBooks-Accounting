@@ -1,0 +1,108 @@
+{
+  "entities": {
+    "Business": {
+      "title": "Business",
+      "description": "A business entity.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the business." },
+        "ownerId": { "type": "string", "description": "The ID of the user who owns the business." },
+        "currency": { "type": "string", "description": "The currency used by the business." }
+      },
+      "required": ["name", "ownerId"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "An account in the chart of accounts.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string", "description": "The ID of the business." },
+        "name": { "type": "string", "description": "The name of the account." },
+        "type": { "type": "string", "enum": ["Asset", "Liability", "Equity", "Revenue", "Expense"], "description": "The type of the account." },
+        "subtype": { "type": "string", "description": "The subtype of the account." },
+        "code": { "type": "string", "description": "The account code." }
+      },
+      "required": ["businessId", "name", "type"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string", "description": "The ID of the business." },
+        "date": { "type": "string", "format": "date-time", "description": "The date of the transaction." },
+        "description": { "type": "string", "description": "The description of the transaction." },
+        "amount": { "type": "number", "description": "The total amount of the transaction." },
+        "type": { "type": "string", "enum": ["Income", "Expense", "Transfer", "Payroll"], "description": "The type of the transaction." },
+        "source": { "type": "string", "enum": ["Manual", "Stripe", "Bank"], "description": "The source of the transaction." },
+        "externalId": { "type": "string", "description": "The ID of the transaction in an external system." }
+      },
+      "required": ["businessId", "date", "description", "amount", "type"]
+    },
+    "Entry": {
+      "title": "Entry",
+      "description": "A double-entry ledger entry.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string", "description": "The ID of the business." },
+        "transactionId": { "type": "string", "description": "The ID of the transaction." },
+        "accountId": { "type": "string", "description": "The ID of the account." },
+        "debit": { "type": "number", "description": "The debit amount." },
+        "credit": { "type": "number", "description": "The credit amount." },
+        "date": { "type": "string", "format": "date-time", "description": "The date of the entry." }
+      },
+      "required": ["businessId", "transactionId", "accountId", "debit", "credit", "date"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "An employee of the business.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string", "description": "The ID of the business." },
+        "name": { "type": "string", "description": "The name of the employee." },
+        "payType": { "type": "string", "enum": ["Salary", "Hourly"], "description": "The pay type of the employee." },
+        "payRate": { "type": "number", "description": "The pay rate of the employee." },
+        "status": { "type": "string", "enum": ["Active", "Inactive"], "description": "The status of the employee." }
+      },
+      "required": ["businessId", "name", "payType", "payRate"]
+    },
+    "PayrollRun": {
+      "title": "PayrollRun",
+      "description": "A payroll run record.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string", "description": "The ID of the business." },
+        "date": { "type": "string", "format": "date-time", "description": "The date of the payroll run." },
+        "periodStart": { "type": "string", "format": "date-time", "description": "The start date of the period." },
+        "periodEnd": { "type": "string", "format": "date-time", "description": "The end date of the period." },
+        "totalGross": { "type": "number", "description": "The total gross pay." },
+        "totalDeductions": { "type": "number", "description": "The total deductions." },
+        "totalNet": { "type": "number", "description": "The total net pay." },
+        "status": { "type": "string", "enum": ["Draft", "Processed"], "description": "The status of the payroll run." }
+      },
+      "required": ["businessId", "date", "periodStart", "periodEnd", "totalGross", "totalDeductions", "totalNet", "status"]
+    },
+    "BankTransaction": {
+      "title": "BankTransaction",
+      "description": "A transaction imported from a bank.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string", "description": "The ID of the business." },
+        "date": { "type": "string", "format": "date-time", "description": "The date of the bank transaction." },
+        "description": { "type": "string", "description": "The description of the bank transaction." },
+        "amount": { "type": "number", "description": "The amount of the bank transaction." },
+        "status": { "type": "string", "enum": ["Pending", "Matched", "Ignored"], "description": "The status of the bank transaction." }
+      },
+      "required": ["businessId", "date", "description", "amount", "status"]
+    }
+  },
+  "firestore": {
+    "/businesses": { "schema": "Business", "description": "Collection of businesses." },
+    "/accounts": { "schema": "Account", "description": "Collection of accounts." },
+    "/transactions": { "schema": "Transaction", "description": "Collection of transactions." },
+    "/entries": { "schema": "Entry", "description": "Collection of ledger entries." },
+    "/employees": { "schema": "Employee", "description": "Collection of employees." },
+    "/payroll_runs": { "schema": "PayrollRun", "description": "Collection of payroll runs." },
+    "/bank_transactions": { "schema": "BankTransaction", "description": "Collection of bank transactions." }
+  }
+}
