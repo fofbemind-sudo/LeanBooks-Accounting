@@ -1,20 +1,27 @@
-# LeanBooks Accounting
+# LeanBooks Accounting (Founder-Operated MVP)
 
-A production-ready, secure, and reliable accounting and payroll application for small businesses.
+A secure, internal-ready accounting and payroll MVP designed for lean startups and founder-operated businesses. This is a beta-ready tool for internal use, not a full QuickBooks replacement.
 
 ## Features
 
 - **Multi-Business Management**: Manage multiple businesses under one account.
-- **Double-Entry Accounting**: Robust ledger system with automated entries for common workflows.
-- **Bank Reconciliation**: Import bank transactions and match them with ledger entries (Auto-match and Manual).
+- **Double-Entry Accounting**: Basic ledger system with automated entries for common workflows.
+- **Bank Reconciliation**: Import bank transactions and auto-match them with ledger entries.
 - **Financial Reporting**:
   - **Profit & Loss**: Real-time revenue and expense tracking.
-  - **Balance Sheet**: Accurate asset, liability, and equity (including Retained Earnings) reporting.
-  - **Cash Balance**: Dedicated dashboard metric for actual cash-on-hand.
+  - **Balance Sheet**: Asset, liability, and equity reporting (including Retained Earnings).
+  - **Cash Balance**: Simple dashboard metric for actual cash-on-hand.
 - **Payroll Management**:
   - Employee management (Salary vs. Hourly).
-  - Payroll processing with tax estimation.
+  - Payroll calculation with basic tax estimation.
   - Automated ledger entries for payroll runs.
+
+## Known Limitations
+
+- **Manual Reconciliation**: Not fully implemented. Only auto-matching is currently supported.
+- **Payroll**: Provides calculations and journal entries only. It does **not** handle tax filing, direct deposit, or compliance reporting.
+- **Integrations**: Stripe and Bank integrations are at a mock/demo level. They must be replaced with live providers (e.g., Plaid, Stripe API) for production use.
+- **Scope**: Designed for lean MVP/internal use. It lacks advanced features like inventory management, multi-currency revaluation, or audit trails.
 - **Security & Authorization**:
   - Firebase Authentication integration.
   - Backend middleware for business ownership verification.

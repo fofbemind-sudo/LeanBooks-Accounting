@@ -20,11 +20,14 @@ export interface Account {
   isActive: boolean;
 }
 
+export type TransactionType = "Income" | "Expense" | "Transfer" | "Adjustment";
+
 export interface Transaction {
   id: string;
   businessId: string;
   date: any;
   description: string;
+  type: TransactionType;
   source: string;
   amount: number;
   status: string;

@@ -160,7 +160,7 @@ export const TransactionsPage = () => {
               <option value="Income">Income</option>
               <option value="Expense">Expense</option>
               <option value="Transfer">Transfer</option>
-              <option value="Adjustment">Manual Adjustment</option>
+              <option value="Adjustment">Adjustment</option>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">

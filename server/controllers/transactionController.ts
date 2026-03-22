@@ -7,6 +7,11 @@ export class TransactionController {
   static async create(req: AuthenticatedRequest, res: Response) {
     const { businessId, date, description, amount, source, type, entries } = req.body;
     
+    const allowedTypes = ["Income", "Expense", "Transfer", "Adjustment"];
+    if (type && !allowedTypes.includes(type)) {
+      return res.status(400).json({ error: `Invalid transaction type. Must be one of: ${allowedTypes.join(", ")}` });
+    }
+
     if (!businessId) return res.status(400).json({ error: "businessId is required" });
     if (!date || isNaN(Date.parse(date))) return res.status(400).json({ error: "Valid date is required" });
     if (!description) return res.status(400).json({ error: "Description is required" });

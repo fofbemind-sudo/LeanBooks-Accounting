@@ -220,7 +220,7 @@ export const SettingsPage = () => {
               <span className="text-xs font-bold uppercase tracking-widest">MVP Note</span>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              This is a production-ready MVP. All transactions are balanced using double-entry logic. Reports are computed from ledger entries.
+              This is a secure, founder-operated MVP. All transactions are balanced using double-entry logic. Reports are computed from ledger entries.
             </p>
           </Card>
         </div>

@@ -22,12 +22,14 @@ export interface Account {
   updatedAt: any;
 }
 
+export type TransactionType = "Income" | "Expense" | "Transfer" | "Adjustment";
+
 export interface Transaction {
   id: string;
   businessId: string;
   date: any;
   description: string;
-  type?: string;
+  type: TransactionType;
   source: "manual" | "stripe" | "bank" | "payroll" | "adjustment";
   sourceRef?: string;
   amount: number;

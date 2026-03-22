@@ -24,7 +24,7 @@ export class LedgerService {
       id: transactionRef.id,
       businessId,
       date,
-      type: transactionData.type || "Other",
+      type: transactionData.type || "Adjustment",
       source: transactionData.source || "manual",
       status: transactionData.status || "posted",
       createdAt: Timestamp.now(),
