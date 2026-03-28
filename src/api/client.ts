@@ -95,6 +95,14 @@ export const api = {
     fetch(`${API_BASE}/reports/cash-balance?businessId=${businessId}&date=${date}`, {
       headers: await getHeaders()
     }).then(r => r.json()),
+  getTrialBalance: async (businessId: string, date: string): Promise<any> =>
+    fetch(`${API_BASE}/reports/trial-balance?businessId=${businessId}&date=${date}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+  getGeneralLedger: async (businessId: string, startDate: string, endDate: string, accountId?: string): Promise<any> =>
+    fetch(`${API_BASE}/reports/general-ledger?businessId=${businessId}&startDate=${startDate}&endDate=${endDate}${accountId ? `&accountId=${accountId}` : ""}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
 
   // Integrations
   syncStripe: async (data: any): Promise<any> =>
@@ -192,5 +200,29 @@ export const api = {
   getBillAging: async (businessId: string): Promise<any> =>
     fetch(`${API_BASE}/bills/aging?businessId=${businessId}`, {
       headers: await getHeaders()
+    }).then(r => r.json()),
+
+  // Recurring Invoices
+  getRecurringInvoices: async (businessId: string): Promise<any[]> =>
+    fetch(`${API_BASE}/recurring-invoices?businessId=${businessId}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+  createRecurringInvoice: async (data: any): Promise<any> =>
+    fetch(`${API_BASE}/recurring-invoices`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  toggleRecurringInvoice: async (data: any): Promise<any> =>
+    fetch(`${API_BASE}/recurring-invoices/toggle`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  processRecurringInvoices: async (businessId: string): Promise<any> =>
+    fetch(`${API_BASE}/recurring-invoices/process`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify({ businessId })
     }).then(r => r.json()),
 };

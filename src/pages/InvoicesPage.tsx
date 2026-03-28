@@ -6,8 +6,11 @@ import {
   Send,
   DollarSign,
   Trash2,
+  Repeat,
+  Play,
+  Pause,
 } from "lucide-react";
-import { Card, Button, Badge, Input, Select, Modal } from "../components/ui";
+import { Card, Button, Badge, Input, Select, Modal, cn } from "../components/ui";
 import { useAppContext } from "../app/providers";
 import { api } from "../api/client";
 import { Invoice, Contact, Account } from "../types";
@@ -35,6 +38,16 @@ export const InvoicesPage = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [activeTab, setActiveTab] = useState<"invoices" | "recurring">("invoices");
+  const [isRecurringOpen, setIsRecurringOpen] = useState(false);
+  const [recurringInvoices, setRecurringInvoices] = useState<any[]>([]);
+
+  // Recurring form
+  const [recCustomerId, setRecCustomerId] = useState("");
+  const [recFrequency, setRecFrequency] = useState("monthly");
+  const [recNextDate, setRecNextDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [recLineItems, setRecLineItems] = useState([{ description: "", quantity: 1, unitPrice: 0 }]);
+  const [recNotes, setRecNotes] = useState("");
 
   // Aging
   const [aging, setAging] = useState<any>(null);
@@ -55,16 +68,18 @@ export const InvoicesPage = () => {
     if (!business) return;
     setLoading(true);
     try {
-      const [inv, cust, accts, agingData] = await Promise.all([
+      const [inv, cust, accts, agingData, recInvs] = await Promise.all([
         api.getInvoices(business.id),
         api.getContacts(business.id, "Customer"),
         api.getAccounts(business.id),
         api.getInvoiceAging(business.id),
+        api.getRecurringInvoices(business.id),
       ]);
       setInvoices(inv);
       setCustomers(cust);
       setAccounts(accts);
       setAging(agingData);
+      setRecurringInvoices(Array.isArray(recInvs) ? recInvs : []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -171,6 +186,62 @@ export const InvoicesPage = () => {
   };
 
   const subtotal = lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
+  const recSubtotal = recLineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
+
+  const handleCreateRecurring = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business) return;
+    const customer = customers.find(c => c.id === recCustomerId);
+    if (!customer) return;
+    const receivableAcc = accounts.find(a => a.name === "Accounts Receivable");
+    const revenueAcc = accounts.find(a => a.name === "Sales Revenue");
+
+    try {
+      await api.createRecurringInvoice({
+        businessId: business.id,
+        customerId: recCustomerId,
+        customerName: customer.name,
+        frequency: recFrequency,
+        nextDate: recNextDate,
+        lineItems: recLineItems,
+        notes: recNotes,
+        receivableAccountId: receivableAcc?.id || "",
+        revenueAccountId: revenueAcc?.id || "",
+      });
+      await fetchData();
+      setIsRecurringOpen(false);
+      setRecCustomerId("");
+      setRecFrequency("monthly");
+      setRecNextDate(format(new Date(), "yyyy-MM-dd"));
+      setRecLineItems([{ description: "", quantity: 1, unitPrice: 0 }]);
+      setRecNotes("");
+    } catch (error) {
+      console.error("Error creating recurring invoice:", error);
+      alert("Failed to create recurring invoice.");
+    }
+  };
+
+  const handleToggleRecurring = async (recurringId: string) => {
+    if (!business) return;
+    try {
+      await api.toggleRecurringInvoice({ businessId: business.id, recurringId });
+      await fetchData();
+    } catch (error) {
+      console.error("Error toggling recurring invoice:", error);
+    }
+  };
+
+  const handleProcessRecurring = async () => {
+    if (!business) return;
+    try {
+      const result = await api.processRecurringInvoices(business.id);
+      alert(`${result.created} invoice(s) generated from recurring templates.`);
+      await fetchData();
+    } catch (error) {
+      console.error("Error processing recurring invoices:", error);
+      alert("Failed to process recurring invoices.");
+    }
+  };
 
   const filtered = filterStatus === "all"
     ? invoices
@@ -187,11 +258,50 @@ export const InvoicesPage = () => {
           <h1 className="text-3xl font-bold text-slate-900">Invoices</h1>
           <p className="text-slate-500">Create and manage customer invoices</p>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" /> New Invoice
-        </Button>
+        <div className="flex gap-3">
+          {activeTab === "recurring" && (
+            <Button variant="outline" onClick={handleProcessRecurring}>
+              <Play className="w-4 h-4 mr-2" /> Process Due
+            </Button>
+          )}
+          {activeTab === "recurring" ? (
+            <Button onClick={() => setIsRecurringOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> New Recurring
+            </Button>
+          ) : (
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> New Invoice
+            </Button>
+          )}
+        </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("invoices")}
+          className={cn(
+            "px-6 py-3 text-sm font-medium transition-colors border-b-2",
+            activeTab === "invoices" ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700"
+          )}
+        >
+          Invoices
+        </button>
+        <button
+          onClick={() => setActiveTab("recurring")}
+          className={cn(
+            "px-6 py-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2",
+            activeTab === "recurring" ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700"
+          )}
+        >
+          <Repeat className="w-4 h-4" /> Recurring
+          {recurringInvoices.filter(r => r.isActive).length > 0 && (
+            <Badge variant="indigo">{recurringInvoices.filter(r => r.isActive).length}</Badge>
+          )}
+        </button>
+      </div>
+
+      {activeTab === "invoices" && (<>
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -299,6 +409,42 @@ export const InvoicesPage = () => {
         </div>
       </Card>
 
+      </>)}
+
+      {/* Recurring Invoices Tab */}
+      {activeTab === "recurring" && (
+        <Card title="Recurring Invoice Templates">
+          <div className="divide-y divide-slate-100">
+            {recurringInvoices.length === 0 ? (
+              <p className="text-center py-8 text-slate-500">No recurring invoices configured.</p>
+            ) : (
+              recurringInvoices.map((rec: any) => (
+                <div key={rec.id} className="py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600">
+                      <Repeat className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900">{rec.customerName}</div>
+                      <div className="text-xs text-slate-500">
+                        {rec.frequency} &middot; ${rec.lineItems?.reduce((s: number, li: any) => s + li.quantity * li.unitPrice, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        &middot; Next: {(() => { const d = rec.nextDate?._seconds ? new Date(rec.nextDate._seconds * 1000) : rec.nextDate?.toDate ? rec.nextDate.toDate() : new Date(rec.nextDate); return format(d, "MMM dd, yyyy"); })()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={rec.isActive ? "success" : "neutral"}>{rec.isActive ? "Active" : "Paused"}</Badge>
+                    <Button size="sm" variant="ghost" onClick={() => handleToggleRecurring(rec.id)}>
+                      {rec.isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Create Invoice Modal */}
       <Modal isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); resetForm(); }} title="Create Invoice">
         <form onSubmit={handleCreate} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
@@ -396,6 +542,81 @@ export const InvoicesPage = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Create Recurring Invoice Modal */}
+      <Modal isOpen={isRecurringOpen} onClose={() => setIsRecurringOpen(false)} title="Create Recurring Invoice">
+        <form onSubmit={handleCreateRecurring} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Customer</label>
+              <Select value={recCustomerId} onChange={(e) => setRecCustomerId(e.target.value)} required>
+                <option value="">Select a customer...</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Frequency</label>
+              <Select value={recFrequency} onChange={(e) => setRecFrequency(e.target.value)}>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">First Invoice Date</label>
+              <Input type="date" value={recNextDate} onChange={(e) => setRecNextDate(e.target.value)} required />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-slate-700">Line Items</label>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setRecLineItems([...recLineItems, { description: "", quantity: 1, unitPrice: 0 }])}>
+                <Plus className="w-3 h-3 mr-1" /> Add Line
+              </Button>
+            </div>
+            {recLineItems.map((li, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-5">
+                  {i === 0 && <label className="block text-xs text-slate-500 mb-1">Description</label>}
+                  <Input value={li.description} onChange={(e) => { const u = [...recLineItems]; u[i].description = e.target.value; setRecLineItems(u); }} placeholder="Item description" required />
+                </div>
+                <div className="col-span-2">
+                  {i === 0 && <label className="block text-xs text-slate-500 mb-1">Qty</label>}
+                  <Input type="number" min="1" value={li.quantity} onChange={(e) => { const u = [...recLineItems]; u[i].quantity = parseInt(e.target.value) || 1; setRecLineItems(u); }} required />
+                </div>
+                <div className="col-span-3">
+                  {i === 0 && <label className="block text-xs text-slate-500 mb-1">Price</label>}
+                  <Input type="number" step="0.01" min="0" value={li.unitPrice || ""} onChange={(e) => { const u = [...recLineItems]; u[i].unitPrice = parseFloat(e.target.value) || 0; setRecLineItems(u); }} placeholder="0.00" required />
+                </div>
+                <div className="col-span-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">${(li.quantity * li.unitPrice).toFixed(2)}</span>
+                  {recLineItems.length > 1 && (
+                    <button type="button" onClick={() => setRecLineItems(recLineItems.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-rose-500">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div className="text-right font-bold text-slate-900 pt-2 border-t">
+              Amount per invoice: ${recSubtotal.toFixed(2)}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+            <Input value={recNotes} onChange={(e) => setRecNotes(e.target.value)} placeholder="Optional notes" />
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setIsRecurringOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={loading || !recCustomerId || recSubtotal <= 0}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Repeat className="w-4 h-4 mr-2" />}
+              Create Recurring
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

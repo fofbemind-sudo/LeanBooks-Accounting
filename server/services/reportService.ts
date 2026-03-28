@@ -128,7 +128,7 @@ export class ReportService {
       .where("businessId", "==", businessId)
       .where("subtype", "==", "Bank")
       .get();
-    
+
     const bankAccountIds = accountsSnapshot.docs.map(doc => doc.id);
 
     const entriesSnapshot = await db.collection("entries")
@@ -149,5 +149,109 @@ export class ReportService {
     });
 
     return { inflows, outflows, netCashChange: inflows - outflows };
+  }
+
+  static async getTrialBalance(businessId: string, asOfDate: Date) {
+    const accountsSnapshot = await db.collection("accounts")
+      .where("businessId", "==", businessId)
+      .get();
+
+    const accountsMap = new Map<string, Account>();
+    accountsSnapshot.forEach(doc => accountsMap.set(doc.id, doc.data() as Account));
+
+    const entriesSnapshot = await db.collection("entries")
+      .where("businessId", "==", businessId)
+      .where("date", "<=", Timestamp.fromDate(asOfDate))
+      .get();
+
+    const totals: Record<string, { debit: number; credit: number }> = {};
+    entriesSnapshot.forEach(doc => {
+      const entry = doc.data();
+      if (!totals[entry.accountId]) totals[entry.accountId] = { debit: 0, credit: 0 };
+      totals[entry.accountId].debit += entry.debit || 0;
+      totals[entry.accountId].credit += entry.credit || 0;
+    });
+
+    const accounts: any[] = [];
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    accountsMap.forEach((account, id) => {
+      const t = totals[id];
+      if (!t) return;
+      const debitBalance = t.debit > t.credit ? t.debit - t.credit : 0;
+      const creditBalance = t.credit > t.debit ? t.credit - t.debit : 0;
+      totalDebit += debitBalance;
+      totalCredit += creditBalance;
+      accounts.push({
+        code: account.code,
+        name: account.name,
+        type: account.type,
+        debit: debitBalance,
+        credit: creditBalance,
+      });
+    });
+
+    accounts.sort((a, b) => a.code.localeCompare(b.code));
+
+    return {
+      metadata: { businessId, asOfDate, reportType: "Trial Balance" },
+      accounts,
+      totals: { debit: totalDebit, credit: totalCredit, balanced: Math.abs(totalDebit - totalCredit) < 0.01 },
+    };
+  }
+
+  static async getGeneralLedger(businessId: string, startDate: Date, endDate: Date, accountId?: string) {
+    const accountsSnapshot = await db.collection("accounts")
+      .where("businessId", "==", businessId)
+      .get();
+
+    const accountsMap = new Map<string, Account>();
+    accountsSnapshot.forEach(doc => accountsMap.set(doc.id, doc.data() as Account));
+
+    let entriesQuery: FirebaseFirestore.Query = db.collection("entries")
+      .where("businessId", "==", businessId)
+      .where("date", ">=", Timestamp.fromDate(startDate))
+      .where("date", "<=", Timestamp.fromDate(endDate));
+
+    const entriesSnapshot = await entriesQuery.orderBy("date", "asc").get();
+
+    // Get transaction descriptions
+    const txIds = new Set<string>();
+    entriesSnapshot.forEach(doc => txIds.add(doc.data().transactionId));
+
+    const txMap = new Map<string, any>();
+    // Fetch transactions in batches of 10 (Firestore 'in' limit)
+    const txIdArray = Array.from(txIds);
+    for (let i = 0; i < txIdArray.length; i += 10) {
+      const batch = txIdArray.slice(i, i + 10);
+      const txSnapshot = await db.collection("transactions")
+        .where("id", "in", batch)
+        .get();
+      txSnapshot.forEach(doc => txMap.set(doc.data().id, doc.data()));
+    }
+
+    const entries: any[] = [];
+    entriesSnapshot.forEach(doc => {
+      const entry = doc.data();
+      if (accountId && entry.accountId !== accountId) return;
+      const account = accountsMap.get(entry.accountId);
+      const tx = txMap.get(entry.transactionId);
+      entries.push({
+        date: entry.date,
+        accountCode: account?.code || "",
+        accountName: account?.name || "Unknown",
+        accountType: account?.type || "",
+        description: tx?.description || entry.memo || "",
+        debit: entry.debit || 0,
+        credit: entry.credit || 0,
+        transactionId: entry.transactionId,
+      });
+    });
+
+    return {
+      metadata: { businessId, startDate, endDate, reportType: "General Ledger" },
+      entries,
+    };
   }
 }
