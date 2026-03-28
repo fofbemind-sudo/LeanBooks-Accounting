@@ -95,6 +95,24 @@ describe("ReconciliationService", () => {
       expect(result.matchCount).toBe(0);
     });
 
+    it("matches amounts within floating-point tolerance (< 0.01)", async () => {
+      seedBankTx("bt_1", 99.999, new Date("2024-06-15"));
+      seedLedgerTx("lt_1", 100.0, new Date("2024-06-15"));
+
+      const result = await ReconciliationService.autoMatch("biz_1");
+
+      expect(result.matchCount).toBe(1);
+    });
+
+    it("does not match amounts differing by more than tolerance", async () => {
+      seedBankTx("bt_1", 99.98, new Date("2024-06-15"));
+      seedLedgerTx("lt_1", 100.0, new Date("2024-06-15"));
+
+      const result = await ReconciliationService.autoMatch("biz_1");
+
+      expect(result.matchCount).toBe(0);
+    });
+
     it("can match multiple transactions in one run", async () => {
       seedBankTx("bt_1", 100, new Date("2024-06-15"));
       seedBankTx("bt_2", 200, new Date("2024-06-20"));

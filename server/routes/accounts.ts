@@ -5,6 +5,9 @@ const router = Router();
 
 router.get("/", async (req: Request, res: Response) => {
   const { businessId } = req.query;
+  if (!businessId) {
+    return res.status(400).json({ error: "businessId is required" });
+  }
   try {
     const snapshot = await db.collection("accounts")
       .where("businessId", "==", businessId)

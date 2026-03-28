@@ -63,8 +63,17 @@ describe("PayrollService", () => {
 
       const preview = await PayrollService.getPayrollPreview("biz_1");
 
-      // deductionRate is undefined, so (employee.deductionRate || 0.2) = 0.2
+      // deductionRate is undefined, so (employee.deductionRate ?? 0.2) = 0.2
       expect(preview.items[0].deductions).toBe(1000); // 5000 * 0.2
+    });
+
+    it("respects deductionRate=0 for tax-exempt employees", async () => {
+      seedEmployee("emp_1", { payType: "Salary", payRate: 60000, deductionRate: 0 });
+
+      const preview = await PayrollService.getPayrollPreview("biz_1");
+
+      expect(preview.items[0].deductions).toBe(0);
+      expect(preview.items[0].net).toBe(5000); // gross = 60000/12 = 5000, no deductions
     });
 
     it("calculates totals across multiple employees", async () => {
