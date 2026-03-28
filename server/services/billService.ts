@@ -99,6 +99,14 @@ export class BillService {
     if (!doc.exists) return null;
     const bill = doc.data() as Bill;
     if (bill.businessId !== businessId) return null;
+    if (bill.status === "Paid" || bill.status === "Cancelled" || bill.status === "Draft") {
+      throw new Error(`Cannot record payment on bill with status "${bill.status}"`);
+    }
+
+    const remaining = bill.total - bill.amountPaid;
+    if (amount > remaining + 0.01) {
+      throw new Error(`Payment amount $${amount.toFixed(2)} exceeds outstanding balance $${remaining.toFixed(2)}`);
+    }
 
     const newAmountPaid = bill.amountPaid + amount;
     const newStatus = newAmountPaid >= bill.total ? "Paid" : bill.status;

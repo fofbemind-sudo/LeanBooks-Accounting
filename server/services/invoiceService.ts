@@ -81,6 +81,14 @@ export class InvoiceService {
     if (!doc.exists) return null;
     const invoice = doc.data() as Invoice;
     if (invoice.businessId !== businessId) return null;
+    if (invoice.status === "Paid" || invoice.status === "Cancelled" || invoice.status === "Draft") {
+      throw new Error(`Cannot record payment on invoice with status "${invoice.status}"`);
+    }
+
+    const remaining = invoice.total - invoice.amountPaid;
+    if (amount > remaining + 0.01) {
+      throw new Error(`Payment amount $${amount.toFixed(2)} exceeds outstanding balance $${remaining.toFixed(2)}`);
+    }
 
     const newAmountPaid = invoice.amountPaid + amount;
     const newStatus = newAmountPaid >= invoice.total ? "Paid" : invoice.status;

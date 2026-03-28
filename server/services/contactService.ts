@@ -51,14 +51,16 @@ export class ContactService {
     const existing = doc.data() as Contact;
     if (existing.businessId !== businessId) return null;
 
-    const updated = {
-      ...existing,
-      ...data,
-      id: contactId,
-      businessId,
-      updatedAt: Timestamp.now(),
-    };
-    await ref.update(updated);
+    const allowedFields = ["name", "email", "phone", "address", "city", "state", "zip", "taxId", "paymentTerms", "notes", "isActive"];
+    const changes: Record<string, any> = { updatedAt: Timestamp.now() };
+    for (const field of allowedFields) {
+      if (field in data) {
+        changes[field] = (data as any)[field];
+      }
+    }
+
+    const updated = { ...existing, ...changes, id: contactId, businessId };
+    await ref.update(changes);
     return updated;
   }
 }

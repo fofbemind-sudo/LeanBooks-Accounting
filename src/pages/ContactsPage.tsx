@@ -71,6 +71,7 @@ export const ContactsPage = () => {
       setForm({ type: "Customer", name: "", email: "", phone: "", address: "", city: "", state: "", zip: "", paymentTerms: "30", notes: "" });
     } catch (error) {
       console.error("Error creating contact:", error);
+      alert("Failed to create contact. Please try again.");
     } finally {
       setLoading(false);
     }

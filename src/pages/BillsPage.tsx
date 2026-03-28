@@ -100,6 +100,7 @@ export const BillsPage = () => {
       resetForm();
     } catch (error) {
       console.error("Error creating bill:", error);
+      alert("Failed to create bill. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -124,6 +125,7 @@ export const BillsPage = () => {
       await fetchData();
     } catch (error) {
       console.error("Error approving bill:", error);
+      alert("Failed to approve bill. Please try again.");
     }
   };
 
@@ -150,6 +152,7 @@ export const BillsPage = () => {
       setPayAmount("");
     } catch (error) {
       console.error("Error recording payment:", error);
+      alert("Failed to record payment. Please try again.");
     }
   };
 
@@ -300,7 +303,7 @@ export const BillsPage = () => {
       </Card>
 
       {/* Create Bill Modal */}
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create Bill">
+      <Modal isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); resetForm(); }} title="Create Bill">
         <form onSubmit={handleCreate} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -368,8 +371,8 @@ export const BillsPage = () => {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading || !vendorId}>
+            <Button type="button" variant="outline" onClick={() => { setIsCreateOpen(false); resetForm(); }}>Cancel</Button>
+            <Button type="submit" disabled={loading || !vendorId || subtotal <= 0}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileCheck className="w-4 h-4 mr-2" />}
               Create Bill
             </Button>

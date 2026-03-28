@@ -6,7 +6,6 @@ import {
   Send,
   DollarSign,
   Trash2,
-  Clock,
 } from "lucide-react";
 import { Card, Button, Badge, Input, Select, Modal } from "../components/ui";
 import { useAppContext } from "../app/providers";
@@ -99,6 +98,7 @@ export const InvoicesPage = () => {
       resetForm();
     } catch (error) {
       console.error("Error creating invoice:", error);
+      alert("Failed to create invoice. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -123,6 +123,7 @@ export const InvoicesPage = () => {
       await fetchData();
     } catch (error) {
       console.error("Error sending invoice:", error);
+      alert("Failed to send invoice. Please try again.");
     }
   };
 
@@ -149,6 +150,7 @@ export const InvoicesPage = () => {
       setPayAmount("");
     } catch (error) {
       console.error("Error recording payment:", error);
+      alert("Failed to record payment. Please try again.");
     }
   };
 
@@ -298,7 +300,7 @@ export const InvoicesPage = () => {
       </Card>
 
       {/* Create Invoice Modal */}
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create Invoice">
+      <Modal isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); resetForm(); }} title="Create Invoice">
         <form onSubmit={handleCreate} className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -362,8 +364,8 @@ export const InvoicesPage = () => {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading || !customerId}>
+            <Button type="button" variant="outline" onClick={() => { setIsCreateOpen(false); resetForm(); }}>Cancel</Button>
+            <Button type="submit" disabled={loading || !customerId || subtotal <= 0}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileText className="w-4 h-4 mr-2" />}
               Create Invoice
             </Button>
