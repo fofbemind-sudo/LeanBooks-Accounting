@@ -1,18 +1,15 @@
-import { Response } from "express";
+import { Response, NextFunction } from "express";
 import { StripeService } from "../services/stripeService";
 import { PlaidMockService } from "../services/plaidMockService";
 import { ReconciliationService } from "../services/reconciliationService";
 import { db } from "../lib/firestore";
 import { AuthenticatedRequest } from "../middleware/auth";
+import { BadRequestError } from "../lib/errors";
 
 export class IntegrationController {
-  static async stripeMockSync(req: AuthenticatedRequest, res: Response) {
+  static async stripeMockSync(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     const { businessId, cashAccountId, feeAccountId, revenueAccountId } = req.body;
-    
-    if (!businessId) return res.status(400).json({ error: "businessId is required" });
-    if (!cashAccountId || !feeAccountId || !revenueAccountId) {
-      return res.status(400).json({ error: "Cash, Fee, and Revenue account IDs are required" });
-    }
+    const requestId = (req as any).requestId || "unknown";
 
     try {
       const results = await StripeService.syncMockTransactions(
@@ -21,27 +18,30 @@ export class IntegrationController {
         feeAccountId,
         revenueAccountId
       );
+      
+      console.log(`[${requestId}] [STRIPE_SYNC]: Stripe mock sync completed for business ${businessId}`);
       res.json(results);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      next(error);
     }
   }
 
-  static async bankMockSync(req: AuthenticatedRequest, res: Response) {
+  static async bankMockSync(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     const { businessId } = req.body;
-    if (!businessId) return res.status(400).json({ error: "businessId is required" });
+    const requestId = (req as any).requestId || "unknown";
 
     try {
       const results = await PlaidMockService.importMockBankTransactions(businessId);
+      console.log(`[${requestId}] [BANK_SYNC]: Bank mock sync completed for business ${businessId}`);
       res.json(results);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      next(error);
     }
   }
 
-  static async listBankTransactions(req: AuthenticatedRequest, res: Response) {
+  static async listBankTransactions(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     const { businessId } = req.query;
-    if (!businessId) return res.status(400).json({ error: "businessId is required" });
+    if (!businessId) return next(new BadRequestError("businessId is required"));
 
     try {
       const snapshot = await db.collection("bank_transactions")
@@ -51,19 +51,20 @@ export class IntegrationController {
       const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       res.json(transactions);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      next(error);
     }
   }
 
-  static async autoMatch(req: AuthenticatedRequest, res: Response) {
+  static async autoMatch(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     const { businessId } = req.body;
-    if (!businessId) return res.status(400).json({ error: "businessId is required" });
+    const requestId = (req as any).requestId || "unknown";
 
     try {
       const results = await ReconciliationService.autoMatch(businessId);
+      console.log(`[${requestId}] [AUTO_MATCH]: Auto-match completed for business ${businessId}`);
       res.json(results);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      next(error);
     }
   }
 }

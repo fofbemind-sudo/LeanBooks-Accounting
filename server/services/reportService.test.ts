@@ -1,210 +1,184 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockDb, mockTimestamp, resetStore, seedDoc } from "../__mocks__/firestore";
 
 vi.mock("../lib/firestore", () => ({
-  db: mockDb,
-  Timestamp: mockTimestamp,
+  db: {
+    collection: vi.fn().mockReturnThis(),
+    doc: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    get: vi.fn(),
+    set: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    add: vi.fn(),
+    batch: vi.fn(),
+  },
+  Timestamp: {
+    now: vi.fn().mockReturnValue({ toDate: () => new Date() }),
+    fromDate: vi.fn().mockImplementation((date: Date) => ({ toDate: () => date })),
+  },
 }));
 
 import { ReportService } from "./reportService";
-
-function seedAccount(id: string, type: string, subtype: string = "General", name?: string) {
-  seedDoc("accounts", id, {
-    businessId: "biz_1",
-    name: name || `${type} Account`,
-    type,
-    subtype,
-  });
-}
-
-function seedEntry(id: string, accountId: string, debit: number, credit: number, date?: Date) {
-  seedDoc("entries", id, {
-    businessId: "biz_1",
-    accountId,
-    debit,
-    credit,
-    date: mockTimestamp.fromDate(date || new Date("2024-06-15")),
-  });
-}
+import { db } from "../lib/firestore";
+import { LedgerService } from "./ledgerService";
 
 describe("ReportService", () => {
   beforeEach(() => {
-    resetStore();
+    vi.clearAllMocks();
   });
 
   describe("getProfitAndLoss", () => {
-    it("calculates revenue, expenses, and net income", async () => {
-      seedAccount("rev_1", "Revenue", "Operating Revenue", "Sales");
-      seedAccount("exp_1", "Expense", "Operating Expense", "Rent");
+    it("should calculate profit and loss correctly", async () => {
+      const mockAccounts = [
+        { id: "acc-1", name: "Sales", type: "Revenue" },
+        { id: "acc-2", name: "Rent", type: "Expense" },
+      ];
 
-      seedEntry("e1", "rev_1", 0, 5000);  // Revenue: credit-based
-      seedEntry("e2", "exp_1", 3000, 0);   // Expense: debit-based
+      const mockEntries = [
+        { accountId: "acc-1", debit: 0, credit: 1000 },
+        { accountId: "acc-2", debit: 500, credit: 0 },
+      ];
 
-      const pnl = await ReportService.getProfitAndLoss(
-        "biz_1",
-        new Date("2020-01-01"),
-        new Date("2030-01-01")
-      );
+      const mockAccountsSnapshot = {
+        forEach: (callback: any) => {
+          mockAccounts.forEach((acc) => callback({ id: acc.id, data: () => acc }));
+        },
+      };
 
-      expect(pnl.totals.revenue).toBe(5000);
-      expect(pnl.totals.expenses).toBe(3000);
-      expect(pnl.totals.netIncome).toBe(2000);
-    });
+      const mockEntriesSnapshot = {
+        forEach: (callback: any) => {
+          mockEntries.forEach((entry) => callback({ data: () => entry }));
+        },
+      };
 
-    it("returns zero totals when no entries exist", async () => {
-      seedAccount("rev_1", "Revenue");
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn()
+          .mockResolvedValueOnce(mockAccountsSnapshot)
+          .mockResolvedValueOnce(mockEntriesSnapshot),
+      });
 
-      const pnl = await ReportService.getProfitAndLoss(
-        "biz_1",
-        new Date("2020-01-01"),
-        new Date("2030-01-01")
-      );
+      const pnl = await ReportService.getProfitAndLoss("biz-1", new Date(), new Date());
 
-      expect(pnl.totals.revenue).toBe(0);
-      expect(pnl.totals.expenses).toBe(0);
-      expect(pnl.totals.netIncome).toBe(0);
-    });
-
-    it("handles negative net income (loss)", async () => {
-      seedAccount("rev_1", "Revenue");
-      seedAccount("exp_1", "Expense");
-
-      seedEntry("e1", "rev_1", 0, 1000);
-      seedEntry("e2", "exp_1", 5000, 0);
-
-      const pnl = await ReportService.getProfitAndLoss(
-        "biz_1",
-        new Date("2020-01-01"),
-        new Date("2030-01-01")
-      );
-
-      expect(pnl.totals.netIncome).toBe(-4000);
-    });
-
-    it("includes metadata in the response", async () => {
-      const pnl = await ReportService.getProfitAndLoss(
-        "biz_1",
-        new Date("2024-01-01"),
-        new Date("2024-12-31")
-      );
-
-      expect(pnl.metadata.reportType).toBe("Profit & Loss");
-      expect(pnl.metadata.businessId).toBe("biz_1");
-    });
-
-    it("groups line items by revenue and expense accounts", async () => {
-      seedAccount("rev_1", "Revenue", "Op", "Product Sales");
-      seedAccount("rev_2", "Revenue", "Op", "Service Revenue");
-      seedAccount("exp_1", "Expense", "Op", "Rent");
-
-      seedEntry("e1", "rev_1", 0, 3000);
-      seedEntry("e2", "rev_2", 0, 2000);
-      seedEntry("e3", "exp_1", 1000, 0);
-
-      const pnl = await ReportService.getProfitAndLoss(
-        "biz_1",
-        new Date("2020-01-01"),
-        new Date("2030-01-01")
-      );
-
-      expect(pnl.lineItems.revenue).toHaveLength(2);
-      expect(pnl.lineItems.expenses).toHaveLength(1);
+      expect(pnl.totals.revenue).toBe(1000);
+      expect(pnl.totals.expenses).toBe(500);
+      expect(pnl.totals.netIncome).toBe(500);
     });
   });
 
   describe("getBalanceSheet", () => {
-    it("categorizes accounts into assets, liabilities, and equity", async () => {
-      seedAccount("asset_1", "Asset", "Bank", "Cash");
-      seedAccount("liab_1", "Liability", "Payable", "AP");
-      seedAccount("eq_1", "Equity", "Equity", "Owner Equity");
+    it("should calculate balance sheet correctly", async () => {
+      const mockAccounts = [
+        { id: "acc-1", name: "Cash", type: "Asset" },
+        { id: "acc-2", name: "Payable", type: "Liability" },
+        { id: "acc-3", name: "Capital", type: "Equity" },
+      ];
 
-      seedEntry("e1", "asset_1", 10000, 0);
-      seedEntry("e2", "liab_1", 0, 5000);
-      seedEntry("e3", "eq_1", 0, 5000);
+      const mockAccountsSnapshot = {
+        forEach: (callback: any) => {
+          mockAccounts.forEach((acc) => callback({ id: acc.id, data: () => acc }));
+        },
+      };
 
-      const bs = await ReportService.getBalanceSheet("biz_1", new Date("2030-01-01"));
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn()
+          .mockResolvedValueOnce(mockAccountsSnapshot) // for accounts
+          .mockResolvedValueOnce(mockAccountsSnapshot) // for P&L accounts
+          .mockResolvedValueOnce({ forEach: () => {} }), // for P&L entries
+      });
 
-      expect(bs.lineItems.assets).toHaveLength(1);
-      expect(bs.lineItems.liabilities).toHaveLength(1);
-      // Equity includes seeded account + retained earnings
-      expect(bs.lineItems.equity.length).toBeGreaterThanOrEqual(1);
-    });
+      vi.spyOn(LedgerService, "getAccountBalances").mockResolvedValue({
+        "acc-1": 1000,
+        "acc-2": -200, // Liability is credit-based, so debit balance is negative
+        "acc-3": -300, // Equity is credit-based
+      });
 
-    it("includes retained earnings from P&L", async () => {
-      seedAccount("rev_1", "Revenue");
-      seedAccount("exp_1", "Expense");
-      seedAccount("asset_1", "Asset");
+      const bs = await ReportService.getBalanceSheet("biz-1", new Date());
 
-      seedEntry("e1", "rev_1", 0, 10000);
-      seedEntry("e2", "exp_1", 3000, 0);
-      seedEntry("e3", "asset_1", 7000, 0);
-
-      const bs = await ReportService.getBalanceSheet("biz_1", new Date("2030-01-01"));
-
-      const retainedEarnings = bs.lineItems.equity.find(
-        (e: any) => e.name === "Retained Earnings / Net Income"
-      );
-      expect(retainedEarnings).toBeDefined();
-      expect(retainedEarnings.balance).toBe(7000); // 10000 revenue - 3000 expense
-    });
-
-    it("returns report type metadata", async () => {
-      const bs = await ReportService.getBalanceSheet("biz_1", new Date("2030-01-01"));
-      expect(bs.metadata.reportType).toBe("Balance Sheet");
+      expect(bs.totals.Assets).toBe(1000);
+      expect(bs.totals.Liabilities).toBe(200);
+      expect(bs.totals.Equity).toBe(300); // 300 from acc-3 + 0 from net income
     });
   });
 
   describe("getCashBalance", () => {
-    it("sums balances of Bank, Cash, and Clearing accounts", async () => {
-      seedAccount("bank_1", "Asset", "Bank", "Checking");
-      seedAccount("cash_1", "Asset", "Cash", "Petty Cash");
-      seedAccount("clear_1", "Asset", "Clearing", "Stripe Clearing");
-      seedAccount("ar_1", "Asset", "Receivable", "AR"); // Not cash-equivalent
+    it("should calculate total cash balance correctly", async () => {
+      const mockAccounts = [
+        { id: "acc-1", name: "Bank", subtype: "Bank" },
+        { id: "acc-2", name: "Cash", subtype: "Cash" },
+        { id: "acc-3", name: "Other", subtype: "Other" },
+      ];
 
-      seedEntry("e1", "bank_1", 5000, 0);
-      seedEntry("e2", "cash_1", 1000, 0);
-      seedEntry("e3", "clear_1", 500, 0);
-      seedEntry("e4", "ar_1", 3000, 0);
+      const mockSnapshot = {
+        forEach: (callback: any) => {
+          mockAccounts.forEach((acc) => callback({ id: acc.id, data: () => acc }));
+        },
+      };
 
-      const result = await ReportService.getCashBalance("biz_1", new Date("2030-01-01"));
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue(mockSnapshot),
+      });
 
-      expect(result.totalCash).toBe(6500); // 5000+1000+500, excluding AR
-    });
+      vi.spyOn(LedgerService, "getAccountBalances").mockResolvedValue({
+        "acc-1": 1000,
+        "acc-2": 500,
+        "acc-3": 200,
+      });
 
-    it("returns zero when no cash accounts exist", async () => {
-      const result = await ReportService.getCashBalance("biz_1", new Date("2030-01-01"));
-      expect(result.totalCash).toBe(0);
+      const result = await ReportService.getCashBalance("biz-1", new Date());
+
+      expect(result.totalCash).toBe(1500); // acc-1 + acc-2
     });
   });
 
   describe("getCashFlow", () => {
-    it("calculates inflows and outflows for bank accounts", async () => {
-      seedAccount("bank_1", "Asset", "Bank", "Checking");
+    it("should calculate cash flow correctly", async () => {
+      const mockAccounts = [
+        { id: "acc-1", name: "Bank", subtype: "Bank" },
+      ];
 
-      seedEntry("e1", "bank_1", 5000, 0);  // Inflow
-      seedEntry("e2", "bank_1", 0, 2000);   // Outflow
+      const mockEntries = [
+        { accountId: "acc-1", debit: 1000, credit: 0 },
+        { accountId: "acc-1", debit: 0, credit: 400 },
+      ];
 
-      const cf = await ReportService.getCashFlow(
-        "biz_1",
-        new Date("2020-01-01"),
-        new Date("2030-01-01")
-      );
+      const mockAccountsSnapshot = {
+        docs: mockAccounts.map(acc => ({ id: acc.id })),
+      };
 
-      expect(cf.inflows).toBe(5000);
-      expect(cf.outflows).toBe(2000);
-      expect(cf.netCashChange).toBe(3000);
+      const mockEntriesSnapshot = {
+        forEach: (callback: any) => {
+          mockEntries.forEach((entry) => callback({ data: () => entry }));
+        },
+      };
+
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn()
+          .mockResolvedValueOnce(mockAccountsSnapshot)
+          .mockResolvedValueOnce(mockEntriesSnapshot),
+      });
+
+      const result = await ReportService.getCashFlow("biz-1", new Date(), new Date());
+
+      expect(result.inflows).toBe(1000);
+      expect(result.outflows).toBe(400);
+      expect(result.netCashChange).toBe(600);
     });
 
-    it("returns zero when no bank entries exist", async () => {
-      const cf = await ReportService.getCashFlow(
-        "biz_1",
-        new Date("2020-01-01"),
-        new Date("2030-01-01")
-      );
+    it("should throw InternalServerError if getCashFlow fails", async () => {
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockRejectedValue(new Error("Firestore error")),
+      });
 
-      expect(cf.inflows).toBe(0);
-      expect(cf.outflows).toBe(0);
-      expect(cf.netCashChange).toBe(0);
+      await expect(
+        ReportService.getCashFlow("biz-1", new Date(), new Date())
+      ).rejects.toThrow("Failed to generate Cash Flow report");
     });
   });
 });

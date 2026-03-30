@@ -1,20 +1,20 @@
-import { Router, Response, Request } from "express";
+import { Router, Response, Request, NextFunction } from "express";
 import { db, Timestamp } from "../lib/firestore";
 import { AccountService } from "../services/accountService";
 import { AuthenticatedRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { businessSchema, initializeBusinessSchema } from "../lib/validation";
+import { UnauthorizedError } from "../lib/errors";
 
 const router = Router();
 
-router.post("/", async (req: AuthenticatedRequest, res: Response) => {
+router.post("/", validate(businessSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const { name, currency } = req.body;
   const ownerId = req.user?.uid;
+  const requestId = (req as any).requestId || "unknown";
 
   if (!ownerId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  if (!name) {
-    return res.status(400).json({ error: "Business name is required" });
+    return next(new UnauthorizedError("Unauthorized"));
   }
 
   try {
@@ -32,17 +32,18 @@ router.post("/", async (req: AuthenticatedRequest, res: Response) => {
     // Initialize default chart of accounts
     await AccountService.initializeBusiness(ref.id);
     
+    console.log(`[${requestId}] [BUSINESS_CREATED]: Business ${name} created for user ${ownerId}`);
     res.json(business);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 
-router.get("/", async (req: AuthenticatedRequest, res: Response) => {
+router.get("/", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const ownerId = req.user?.uid;
 
   if (!ownerId) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return next(new UnauthorizedError("Unauthorized"));
   }
 
   try {
@@ -52,19 +53,20 @@ router.get("/", async (req: AuthenticatedRequest, res: Response) => {
     const businesses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(businesses);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 
-router.post("/initialize", async (req: AuthenticatedRequest, res: Response) => {
+router.post("/initialize", validate(initializeBusinessSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const { businessId } = req.body;
-  if (!businessId) return res.status(400).json({ error: "businessId is required" });
+  const requestId = (req as any).requestId || "unknown";
   
   try {
     const accounts = await AccountService.initializeBusiness(businessId);
+    console.log(`[${requestId}] [BUSINESS_INITIALIZED]: Business ${businessId} accounts initialized`);
     res.json(accounts);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 

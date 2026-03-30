@@ -1,18 +1,15 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Receipt,
-  BarChart3,
-  Users,
-  Settings,
+import { 
+  LayoutDashboard, 
+  Receipt, 
+  BarChart3, 
+  Users, 
+  Settings, 
   LogOut,
   Building2,
   Menu,
-  X,
-  UserCircle,
-  FileText,
-  FileCheck,
+  X
 } from "lucide-react";
 import { cn } from "../ui";
 import { useAppContext } from "../../app/providers";
@@ -28,9 +25,6 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/" },
     { icon: Receipt, label: "Transactions", path: "/transactions" },
-    { icon: UserCircle, label: "Contacts", path: "/contacts" },
-    { icon: FileText, label: "Invoices", path: "/invoices" },
-    { icon: FileCheck, label: "Bills", path: "/bills" },
     { icon: BarChart3, label: "Reports", path: "/reports" },
     { icon: Users, label: "Payroll", path: "/payroll" },
     { icon: Settings, label: "Settings", path: "/settings" },

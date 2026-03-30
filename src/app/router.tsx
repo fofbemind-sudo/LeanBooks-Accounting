@@ -1,17 +1,16 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useAppContext } from "./providers";
 import { Layout } from "../components/layout/Layout";
-import { DashboardPage } from "../pages/DashboardPage";
-import { TransactionsPage } from "../pages/TransactionsPage";
-import { ReportsPage } from "../pages/ReportsPage";
-import { PayrollPage } from "../pages/PayrollPage";
-import { ContactsPage } from "../pages/ContactsPage";
-import { InvoicesPage } from "../pages/InvoicesPage";
-import { BillsPage } from "../pages/BillsPage";
-import { SettingsPage } from "../pages/SettingsPage";
-import { LoginPage } from "../pages/LoginPage";
-import { Loader2 } from "lucide-react";
+import { LoadingSpinner } from "../components/ui";
+
+// Lazy load pages
+const DashboardPage = lazy(() => import("../pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
+const TransactionsPage = lazy(() => import("../pages/TransactionsPage").then(m => ({ default: m.TransactionsPage })));
+const ReportsPage = lazy(() => import("../pages/ReportsPage").then(m => ({ default: m.ReportsPage })));
+const PayrollPage = lazy(() => import("../pages/PayrollPage").then(m => ({ default: m.PayrollPage })));
+const SettingsPage = lazy(() => import("../pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
+const LoginPage = lazy(() => import("../pages/LoginPage").then(m => ({ default: m.LoginPage })));
 
 export const AppRouter = () => {
   const { user, loading, business } = useAppContext();
@@ -19,7 +18,7 @@ export const AppRouter = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -27,10 +26,16 @@ export const AppRouter = () => {
   if (!user) {
     return (
       <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <LoadingSpinner size="lg" />
+          </div>
+        }>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
       </Router>
     );
   }
@@ -38,17 +43,20 @@ export const AppRouter = () => {
   return (
     <Router>
       <Layout>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/transactions" element={<TransactionsPage />} />
-          <Route path="/contacts" element={<ContactsPage />} />
-          <Route path="/invoices" element={<InvoicesPage />} />
-          <Route path="/bills" element={<BillsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/payroll" element={<PayrollPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={
+          <div className="min-h-[400px] flex items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        }>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/transactions" element={<TransactionsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/payroll" element={<PayrollPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </Layout>
     </Router>
   );

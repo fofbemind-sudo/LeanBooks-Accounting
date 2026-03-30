@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Users, 
   Plus, 
@@ -6,19 +6,25 @@ import {
   Calendar,
   DollarSign,
   History,
-  CheckCircle2
+  CheckCircle2,
+  UserPlus,
+  ClipboardList
 } from "lucide-react";
-import { Card, Button, Badge, Input, Select, Modal } from "../components/ui";
+import { Card, Button, Badge, Input, Select, Modal, LoadingSpinner, EmptyState } from "../components/ui";
 import { useAppContext } from "../app/providers";
 import { api } from "../api/client";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { cn } from "../components/ui";
+import { toast } from "sonner";
+import { useTitle } from "../hooks/useTitle";
 
-export const PayrollPage = () => {
+export const PayrollPage = React.memo(() => {
+  useTitle("Payroll");
   const { business } = useAppContext();
   const [employees, setEmployees] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
 
@@ -34,31 +40,34 @@ export const PayrollPage = () => {
   const [preview, setPreview] = useState<{
     items: any[];
     totalGross: number;
-    totalTaxes: number;
+    totalDeductions: number;
     totalNet: number;
   } | null>(null);
 
-  useEffect(() => {
+  const fetchData = async (showLoading = true) => {
     if (!business) return;
-    const fetchData = async () => {
-      try {
-        const [emps, pruns] = await Promise.all([
-          api.getEmployees(business.id),
-          api.getPayrollRuns(business.id)
-        ]);
-        setEmployees(emps);
-        setRuns(pruns);
-      } catch (error) {
-        console.error("Error fetching payroll data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (showLoading) setLoading(true);
+    try {
+      const [emps, pruns] = await Promise.all([
+        api.getEmployees(business.id),
+        api.getPayrollRuns(business.id)
+      ]);
+      setEmployees(emps);
+      setRuns(pruns);
+    } catch (error) {
+      console.error("Error fetching payroll data:", error);
+      toast.error("Failed to load payroll data");
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [business]);
 
   const calculatePreview = async () => {
-    if (!business) return;
+    if (!business || employees.length === 0) return;
     try {
       const employeeInputs = employees.map(emp => ({
         employeeId: emp.id,
@@ -72,17 +81,24 @@ export const PayrollPage = () => {
   };
 
   useEffect(() => {
-    if (isRunModalOpen) {
+    if (isRunModalOpen && employees.length > 0) {
       calculatePreview();
     } else {
       setPreview(null);
     }
   }, [isRunModalOpen, hourlyInputs, employees]);
 
+  const isEmpFormValid = empName.trim() !== "" && empPayRate !== "" && parseFloat(empPayRate) > 0;
+
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!business) return;
-    setLoading(true);
+    if (!isEmpFormValid) {
+      toast.error("Please enter a valid name and pay rate");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       await api.createEmployee({
         businessId: business.id,
@@ -90,21 +106,22 @@ export const PayrollPage = () => {
         payType: empPayType,
         payRate: parseFloat(empPayRate),
       });
-      const emps = await api.getEmployees(business.id);
-      setEmployees(emps);
+      toast.success("Employee added successfully");
+      await fetchData(false);
       setIsEmpModalOpen(false);
       setEmpName("");
       setEmpPayRate("");
     } catch (error) {
       console.error("Error adding employee:", error);
+      toast.error("Failed to add employee");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   const handleRunPayroll = async () => {
     if (!business) return;
-    setLoading(true);
+    setSubmitting(true);
     try {
       const accounts = await api.getAccounts(business.id);
       const cashAcc = accounts.find(a => a.name === "Cash")?.id;
@@ -112,7 +129,7 @@ export const PayrollPage = () => {
       const liabAcc = accounts.find(a => a.name === "Payroll Taxes Payable")?.id;
 
       if (!cashAcc || !expAcc || !liabAcc) {
-        alert("Please ensure you have 'Cash', 'Payroll Expense', and 'Payroll Taxes Payable' accounts set up in Settings.");
+        toast.error("Required accounts not found. Please check your Settings.");
         return;
       }
 
@@ -131,26 +148,35 @@ export const PayrollPage = () => {
         employeeInputs
       });
 
-      const pruns = await api.getPayrollRuns(business.id);
-      setRuns(pruns);
+      toast.success("Payroll processed successfully");
+      await fetchData(false);
       setIsRunModalOpen(false);
     } catch (error) {
       console.error("Error running payroll:", error);
+      toast.error("Failed to process payroll");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Payroll</h1>
           <p className="text-slate-500">Manage employees and process payroll</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => setIsEmpModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Add Employee</Button>
-          <Button onClick={() => setIsRunModalOpen(true)}><DollarSign className="w-4 h-4 mr-2" /> Run Payroll</Button>
+          <Button onClick={() => setIsRunModalOpen(true)} disabled={employees.length === 0}><DollarSign className="w-4 h-4 mr-2" /> Run Payroll</Button>
         </div>
       </div>
 
@@ -160,7 +186,12 @@ export const PayrollPage = () => {
           <Card title="Employees">
             <div className="divide-y divide-slate-100">
               {employees.length === 0 ? (
-                <p className="text-center py-8 text-slate-500">No employees found.</p>
+                <EmptyState 
+                  icon={UserPlus}
+                  title="No employees yet"
+                  description="Add your first employee to start managing payroll."
+                  action={{ label: "Add Employee", onClick: () => setIsEmpModalOpen(true) }}
+                />
               ) : (
                 employees.map(emp => (
                   <div key={emp.id} className="py-4 flex items-center justify-between">
@@ -183,7 +214,11 @@ export const PayrollPage = () => {
           <Card title="Payroll History">
             <div className="divide-y divide-slate-100">
               {runs.length === 0 ? (
-                <p className="text-center py-8 text-slate-500">No payroll history.</p>
+                <EmptyState 
+                  icon={ClipboardList}
+                  title="No payroll history"
+                  description="Your processed payroll runs will appear here."
+                />
               ) : (
                 runs.map(run => (
                   <div key={run.id} className="py-4 flex items-center justify-between">
@@ -238,7 +273,7 @@ export const PayrollPage = () => {
       <Modal isOpen={isEmpModalOpen} onClose={() => setIsEmpModalOpen(false)} title="Add New Employee">
         <form onSubmit={handleAddEmployee} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name <span className="text-rose-500">*</span></label>
             <Input value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder="e.g. Jane Doe" required />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -250,14 +285,14 @@ export const PayrollPage = () => {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Pay Rate ({empPayType === "Salary" ? "Annual" : "Hourly"})</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Pay Rate ({empPayType === "Salary" ? "Annual" : "Hourly"}) <span className="text-rose-500">*</span></label>
               <Input type="number" value={empPayRate} onChange={(e) => setEmpPayRate(e.target.value)} placeholder="0.00" required />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={() => setIsEmpModalOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+            <Button type="submit" disabled={submitting || !isEmpFormValid}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
               Add Employee
             </Button>
           </div>
@@ -265,7 +300,7 @@ export const PayrollPage = () => {
       </Modal>
 
       <Modal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} title="Process Payroll">
-        <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2">
+        <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2 scrollbar-hide">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Period Start</label>
@@ -292,7 +327,7 @@ export const PayrollPage = () => {
               </div>
             ))}
             {employees.filter(e => e.payType === "Hourly").length === 0 && (
-              <p className="text-xs text-slate-400 italic">No hourly employees.</p>
+              <p className="text-xs text-slate-400 italic text-center py-2">No hourly employees.</p>
             )}
           </div>
 
@@ -328,8 +363,8 @@ export const PayrollPage = () => {
 
           <div className="flex justify-end gap-3 pt-4 border-t sticky bottom-0 bg-white pb-2">
             <Button variant="outline" onClick={() => setIsRunModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleRunPayroll} disabled={loading || employees.length === 0}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
+            <Button onClick={handleRunPayroll} disabled={submitting || employees.length === 0}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
               Confirm & Process
             </Button>
           </div>
@@ -337,4 +372,4 @@ export const PayrollPage = () => {
       </Modal>
     </div>
   );
-};
+});

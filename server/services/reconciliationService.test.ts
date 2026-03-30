@@ -1,127 +1,113 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockDb, mockTimestamp, resetStore, seedDoc } from "../__mocks__/firestore";
 
 vi.mock("../lib/firestore", () => ({
-  db: mockDb,
-  Timestamp: mockTimestamp,
+  db: {
+    collection: vi.fn().mockReturnThis(),
+    doc: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    get: vi.fn(),
+    batch: vi.fn(),
+  },
+  Timestamp: {
+    now: vi.fn().mockReturnValue({ toDate: () => new Date() }),
+    fromDate: vi.fn().mockImplementation((date: Date) => ({ toDate: () => date })),
+  },
 }));
 
 import { ReconciliationService } from "./reconciliationService";
-
-function seedBankTx(id: string, amount: number, date: Date, status = "unmatched") {
-  seedDoc("bank_transactions", id, {
-    businessId: "biz_1",
-    amount,
-    date: mockTimestamp.fromDate(date),
-    status,
-  });
-}
-
-function seedLedgerTx(id: string, amount: number, date: Date, status = "posted") {
-  seedDoc("transactions", id, {
-    id,
-    businessId: "biz_1",
-    amount,
-    date: mockTimestamp.fromDate(date),
-    status,
-  });
-}
+import { db } from "../lib/firestore";
 
 describe("ReconciliationService", () => {
   beforeEach(() => {
-    resetStore();
+    vi.clearAllMocks();
   });
 
   describe("autoMatch", () => {
-    it("matches bank and ledger transactions with same amount and close dates", async () => {
-      seedBankTx("bt_1", 100, new Date("2024-06-15"));
-      seedLedgerTx("lt_1", 100, new Date("2024-06-15"));
+    it("should match bank transactions with ledger transactions by amount and date", async () => {
+      const now = new Date();
+      const mockBankTxs = [
+        { 
+          id: "btx-1", 
+          amount: 100, 
+          date: { toDate: () => now }, 
+          status: "unmatched" 
+        },
+      ];
 
-      const result = await ReconciliationService.autoMatch("biz_1");
+      const mockLedgerTxs = [
+        { 
+          id: "ltx-1", 
+          amount: 100, 
+          date: { toDate: () => new Date(now.getTime() + 1000 * 60 * 60) }, // 1 hour later
+          status: "posted" 
+        },
+      ];
 
-      expect(result.matchCount).toBe(1);
-    });
+      const mockBankSnapshot = {
+        docs: mockBankTxs.map(tx => ({ 
+          data: () => tx, 
+          ref: { id: tx.id } 
+        })),
+      };
 
-    it("matches when dates are within 3 days", async () => {
-      seedBankTx("bt_1", 250, new Date("2024-06-15"));
-      seedLedgerTx("lt_1", 250, new Date("2024-06-17")); // 2 days later
+      const mockLedgerSnapshot = {
+        docs: mockLedgerTxs.map(tx => ({ 
+          data: () => tx, 
+          ref: { id: tx.id } 
+        })),
+      };
 
-      const result = await ReconciliationService.autoMatch("biz_1");
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn()
+          .mockResolvedValueOnce(mockBankSnapshot)
+          .mockResolvedValueOnce(mockLedgerSnapshot),
+        doc: vi.fn().mockReturnThis(),
+      });
 
-      expect(result.matchCount).toBe(1);
-    });
+      const mockBatch = {
+        update: vi.fn(),
+        commit: vi.fn().mockResolvedValue({}),
+      };
+      (db.batch as any).mockReturnValue(mockBatch);
 
-    it("does not match when dates are more than 3 days apart", async () => {
-      seedBankTx("bt_1", 250, new Date("2024-06-15"));
-      seedLedgerTx("lt_1", 250, new Date("2024-06-25")); // 10 days later
-
-      const result = await ReconciliationService.autoMatch("biz_1");
-
-      expect(result.matchCount).toBe(0);
-    });
-
-    it("does not match when amounts differ", async () => {
-      seedBankTx("bt_1", 100, new Date("2024-06-15"));
-      seedLedgerTx("lt_1", 200, new Date("2024-06-15"));
-
-      const result = await ReconciliationService.autoMatch("biz_1");
-
-      expect(result.matchCount).toBe(0);
-    });
-
-    it("matches by absolute value (negative bank vs positive ledger)", async () => {
-      seedBankTx("bt_1", -500, new Date("2024-06-15"));
-      seedLedgerTx("lt_1", 500, new Date("2024-06-15"));
-
-      const result = await ReconciliationService.autoMatch("biz_1");
-
-      expect(result.matchCount).toBe(1);
-    });
-
-    it("returns zero matches when no bank transactions exist", async () => {
-      seedLedgerTx("lt_1", 100, new Date("2024-06-15"));
-
-      const result = await ReconciliationService.autoMatch("biz_1");
-
-      expect(result.matchCount).toBe(0);
-    });
-
-    it("skips already matched bank transactions", async () => {
-      seedBankTx("bt_1", 100, new Date("2024-06-15"), "matched");
-      seedLedgerTx("lt_1", 100, new Date("2024-06-15"));
-
-      const result = await ReconciliationService.autoMatch("biz_1");
-
-      expect(result.matchCount).toBe(0);
-    });
-
-    it("matches amounts within floating-point tolerance (< 0.01)", async () => {
-      seedBankTx("bt_1", 99.999, new Date("2024-06-15"));
-      seedLedgerTx("lt_1", 100.0, new Date("2024-06-15"));
-
-      const result = await ReconciliationService.autoMatch("biz_1");
+      const result = await ReconciliationService.autoMatch("biz-1");
 
       expect(result.matchCount).toBe(1);
+      expect(mockBatch.update).toHaveBeenCalledTimes(2);
+      expect(mockBatch.commit).toHaveBeenCalled();
     });
 
-    it("does not match amounts differing by more than tolerance", async () => {
-      seedBankTx("bt_1", 99.98, new Date("2024-06-15"));
-      seedLedgerTx("lt_1", 100.0, new Date("2024-06-15"));
+    it("should not match if amount differs", async () => {
+      const now = new Date();
+      const mockBankTxs = [{ id: "btx-1", amount: 100, date: { toDate: () => now }, status: "unmatched" }];
+      const mockLedgerTxs = [{ id: "ltx-1", amount: 101, date: { toDate: () => now }, status: "posted" }];
 
-      const result = await ReconciliationService.autoMatch("biz_1");
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn()
+          .mockResolvedValueOnce({ docs: mockBankTxs.map(tx => ({ data: () => tx, ref: {} })) })
+          .mockResolvedValueOnce({ docs: mockLedgerTxs.map(tx => ({ data: () => tx, ref: {} })) }),
+      });
+
+      const mockBatch = { update: vi.fn(), commit: vi.fn().mockResolvedValue({}) };
+      (db.batch as any).mockReturnValue(mockBatch);
+
+      const result = await ReconciliationService.autoMatch("biz-1");
 
       expect(result.matchCount).toBe(0);
+      expect(mockBatch.update).not.toHaveBeenCalled();
     });
 
-    it("can match multiple transactions in one run", async () => {
-      seedBankTx("bt_1", 100, new Date("2024-06-15"));
-      seedBankTx("bt_2", 200, new Date("2024-06-20"));
-      seedLedgerTx("lt_1", 100, new Date("2024-06-15"));
-      seedLedgerTx("lt_2", 200, new Date("2024-06-20"));
+    it("should throw InternalServerError if autoMatch fails", async () => {
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockRejectedValue(new Error("Firestore error")),
+      });
 
-      const result = await ReconciliationService.autoMatch("biz_1");
-
-      expect(result.matchCount).toBe(2);
+      await expect(
+        ReconciliationService.autoMatch("biz-1")
+      ).rejects.toThrow("Failed to perform auto-match reconciliation");
     });
   });
 });

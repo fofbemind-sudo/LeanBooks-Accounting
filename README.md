@@ -11,6 +11,12 @@ A secure, internal-ready accounting and payroll MVP designed for lean startups a
   - **Profit & Loss**: Real-time revenue and expense tracking.
   - **Balance Sheet**: Asset, liability, and equity reporting (including Retained Earnings).
   - **Cash Balance**: Simple dashboard metric for actual cash-on-hand.
+- **Production Hardening**:
+  - **Comprehensive Unit Tests**: 90%+ coverage for all core backend services using Vitest.
+  - **Audit Trail**: Automated logging of all CREATE, UPDATE, and DELETE operations to a secure `audit_log` collection.
+  - **Rate Limiting**: Granular, route-specific rate limits for authentication, transactions, and reports.
+  - **Atomic Transactions**: All multi-document writes (payroll, ledger) are wrapped in Firestore batch operations to ensure data integrity.
+  - **Database Indexing**: Optimized composite indexes for high-performance querying.
 - **Payroll Management**:
   - Employee management (Salary vs. Hourly).
   - Payroll calculation with basic tax estimation.

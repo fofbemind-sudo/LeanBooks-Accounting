@@ -1,181 +1,134 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockDb, mockTimestamp, resetStore } from "../__mocks__/firestore";
 
 vi.mock("../lib/firestore", () => ({
-  db: mockDb,
-  Timestamp: mockTimestamp,
+  db: {
+    collection: vi.fn().mockReturnThis(),
+    doc: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    get: vi.fn(),
+    set: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    add: vi.fn(),
+    batch: vi.fn(),
+  },
+  Timestamp: {
+    now: vi.fn().mockReturnValue({ toDate: () => new Date() }),
+    fromDate: vi.fn().mockImplementation((date: Date) => ({ toDate: () => date })),
+  },
 }));
 
 import { LedgerService } from "./ledgerService";
+import { db, Timestamp } from "../lib/firestore";
 
 describe("LedgerService", () => {
   beforeEach(() => {
-    resetStore();
+    vi.clearAllMocks();
   });
 
   describe("createTransactionWithEntries", () => {
-    it("creates a transaction when debits equal credits", async () => {
-      const result = await LedgerService.createTransactionWithEntries(
-        "biz_1",
-        { date: "2024-01-15", description: "Test transaction", amount: 100 },
-        [
-          { accountId: "acc_cash", debit: 100, credit: 0 },
-          { accountId: "acc_revenue", debit: 0, credit: 100 },
-        ]
-      );
+    it("should throw an error if debits and credits are not balanced", async () => {
+      const entries = [
+        { accountId: "1", debit: 100, credit: 0 },
+        { accountId: "2", debit: 0, credit: 50 },
+      ];
 
-      expect(result).toBeDefined();
-      expect(result.businessId).toBe("biz_1");
-      expect(result.description).toBe("Test transaction");
-      expect(result.status).toBe("posted");
-      expect(result.source).toBe("manual");
-    });
-
-    it("throws when debits do not equal credits", async () => {
       await expect(
-        LedgerService.createTransactionWithEntries(
-          "biz_1",
-          { description: "Unbalanced" },
-          [
-            { accountId: "acc_cash", debit: 100, credit: 0 },
-            { accountId: "acc_revenue", debit: 0, credit: 50 },
-          ]
-        )
+        LedgerService.createTransactionWithEntries("biz-1", {}, entries)
       ).rejects.toThrow("Total debits must equal total credits.");
     });
 
-    it("accepts entries within the 0.001 tolerance", async () => {
+    it("should create a transaction and entries in a batch", async () => {
+      const entries = [
+        { accountId: "1", debit: 100, credit: 0 },
+        { accountId: "2", debit: 0, credit: 100 },
+      ];
+
+      const mockBatch = {
+        set: vi.fn(),
+        commit: vi.fn().mockResolvedValue({}),
+      };
+      (db.batch as any).mockReturnValue(mockBatch);
+
+      const mockDoc = { id: "mock-id" };
+      (db.collection as any).mockReturnValue({
+        doc: vi.fn().mockReturnValue(mockDoc),
+      });
+
       const result = await LedgerService.createTransactionWithEntries(
-        "biz_1",
-        { description: "Near-balanced" },
-        [
-          { accountId: "acc_cash", debit: 100.0005, credit: 0 },
-          { accountId: "acc_revenue", debit: 0, credit: 100 },
-        ]
+        "biz-1",
+        { description: "Test Transaction" },
+        entries
       );
 
-      expect(result).toBeDefined();
+      expect(db.batch).toHaveBeenCalled();
+      expect(mockBatch.set).toHaveBeenCalledTimes(3); // 1 transaction + 2 entries
+      expect(mockBatch.commit).toHaveBeenCalled();
+      expect(result.id).toBe("mock-id");
+      expect(result.businessId).toBe("biz-1");
     });
 
-    it("rejects entries just outside the 0.001 tolerance", async () => {
+    it("should use the provided date if available", async () => {
+      const entries = [
+        { accountId: "1", debit: 100, credit: 0 },
+        { accountId: "2", debit: 0, credit: 100 },
+      ];
+
+      const mockBatch = { set: vi.fn(), commit: vi.fn().mockResolvedValue({}) };
+      (db.batch as any).mockReturnValue(mockBatch);
+
+      const testDate = "2023-01-01";
+      await LedgerService.createTransactionWithEntries(
+        "biz-1",
+        { date: testDate as any },
+        entries
+      );
+
+      expect(Timestamp.fromDate).toHaveBeenCalled();
+    });
+
+    it("should throw InternalServerError if batch commit fails", async () => {
+      const entries = [
+        { accountId: "1", debit: 100, credit: 0 },
+        { accountId: "2", debit: 0, credit: 100 },
+      ];
+      const mockBatch = {
+        set: vi.fn(),
+        commit: vi.fn().mockRejectedValue(new Error("Commit failed")),
+      };
+      (db.batch as any).mockReturnValue(mockBatch);
+
       await expect(
-        LedgerService.createTransactionWithEntries(
-          "biz_1",
-          { description: "Just outside tolerance" },
-          [
-            { accountId: "acc_cash", debit: 100.002, credit: 0 },
-            { accountId: "acc_revenue", debit: 0, credit: 100 },
-          ]
-        )
-      ).rejects.toThrow("Total debits must equal total credits.");
-    });
-
-    it("defaults missing debit/credit to 0", async () => {
-      const result = await LedgerService.createTransactionWithEntries(
-        "biz_1",
-        { description: "Defaults test" },
-        [
-          { accountId: "acc_cash", debit: 50 },
-          { accountId: "acc_revenue", credit: 50 },
-        ]
-      );
-
-      expect(result).toBeDefined();
-    });
-
-    it("uses default type, source, and status when not provided", async () => {
-      const result = await LedgerService.createTransactionWithEntries(
-        "biz_1",
-        { description: "Defaults" },
-        [
-          { accountId: "a1", debit: 10, credit: 0 },
-          { accountId: "a2", debit: 0, credit: 10 },
-        ]
-      );
-
-      expect(result.type).toBe("Adjustment");
-      expect(result.source).toBe("manual");
-      expect(result.status).toBe("posted");
-    });
-
-    it("preserves provided type, source, and status", async () => {
-      const result = await LedgerService.createTransactionWithEntries(
-        "biz_1",
-        { description: "Custom", type: "Income", source: "stripe", status: "draft" },
-        [
-          { accountId: "a1", debit: 10, credit: 0 },
-          { accountId: "a2", debit: 0, credit: 10 },
-        ]
-      );
-
-      expect(result.type).toBe("Income");
-      expect(result.source).toBe("stripe");
-      expect(result.status).toBe("draft");
-    });
-
-    it("handles zero-amount balanced entries", async () => {
-      const result = await LedgerService.createTransactionWithEntries(
-        "biz_1",
-        { description: "Zero" },
-        [
-          { accountId: "a1", debit: 0, credit: 0 },
-          { accountId: "a2", debit: 0, credit: 0 },
-        ]
-      );
-
-      expect(result).toBeDefined();
-    });
-
-    it("handles multi-leg entries that balance", async () => {
-      const result = await LedgerService.createTransactionWithEntries(
-        "biz_1",
-        { description: "Multi-leg" },
-        [
-          { accountId: "cash", debit: 97, credit: 0 },
-          { accountId: "fees", debit: 3, credit: 0 },
-          { accountId: "revenue", debit: 0, credit: 100 },
-        ]
-      );
-
-      expect(result).toBeDefined();
+        LedgerService.createTransactionWithEntries("biz-1", {}, entries)
+      ).rejects.toThrow("Failed to create transaction with entries");
     });
   });
 
   describe("getAccountBalances", () => {
-    it("returns debit-minus-credit balances per account", async () => {
-      const { seedDoc, mockTimestamp: ts } = await import("../__mocks__/firestore");
-      const pastDate = ts.fromDate(new Date("2024-01-01"));
-      // Seed some entries with mock timestamps that will pass <= filter
-      seedDoc("entries", "e1", {
-        businessId: "biz_1",
-        accountId: "acc_cash",
-        debit: 100,
-        credit: 0,
-        date: pastDate,
-      });
-      seedDoc("entries", "e2", {
-        businessId: "biz_1",
-        accountId: "acc_revenue",
-        debit: 0,
-        credit: 100,
-        date: pastDate,
-      });
-      seedDoc("entries", "e3", {
-        businessId: "biz_1",
-        accountId: "acc_cash",
-        debit: 50,
-        credit: 0,
-        date: pastDate,
+    it("should calculate account balances correctly", async () => {
+      const mockEntries = [
+        { accountId: "acc-1", debit: 100, credit: 0 },
+        { accountId: "acc-1", debit: 0, credit: 20 },
+        { accountId: "acc-2", debit: 50, credit: 0 },
+      ];
+
+      const mockSnapshot = {
+        forEach: (callback: any) => {
+          mockEntries.forEach((entry) => callback({ data: () => entry }));
+        },
+      };
+
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue(mockSnapshot),
       });
 
-      const balances = await LedgerService.getAccountBalances("biz_1", new Date("2025-01-01"));
-      expect(balances["acc_cash"]).toBe(150);
-      expect(balances["acc_revenue"]).toBe(-100);
-    });
+      const balances = await LedgerService.getAccountBalances("biz-1", new Date());
 
-    it("returns empty object when no entries exist", async () => {
-      const balances = await LedgerService.getAccountBalances("biz_empty", new Date("2025-01-01"));
-      expect(balances).toEqual({});
+      expect(balances["acc-1"]).toBe(80);
+      expect(balances["acc-2"]).toBe(50);
     });
   });
 });

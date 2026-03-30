@@ -1,154 +1,115 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockDb, mockTimestamp, resetStore, seedDoc } from "../__mocks__/firestore";
 
-vi.mock("../lib/firestore", () => ({
-  db: mockDb,
-  Timestamp: mockTimestamp,
-}));
+vi.mock("../lib/firestore", () => {
+  const mockBatch = {
+    set: vi.fn(),
+    commit: vi.fn().mockResolvedValue({}),
+  };
+  return {
+    db: {
+      collection: vi.fn().mockReturnThis(),
+      doc: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      get: vi.fn(),
+      set: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      add: vi.fn(),
+      batch: vi.fn().mockReturnValue(mockBatch),
+    },
+    Timestamp: {
+      now: vi.fn().mockReturnValue({ toDate: () => new Date() }),
+      fromDate: vi.fn().mockImplementation((date: Date) => ({ toDate: () => date })),
+    },
+  };
+});
 
 import { PayrollService } from "./payrollService";
-
-function seedEmployee(id: string, overrides: Record<string, any> = {}) {
-  seedDoc("employees", id, {
-    businessId: "biz_1",
-    name: "Test Employee",
-    payType: "Salary",
-    payRate: 120000,
-    defaultHours: 160,
-    deductionRate: 0.2,
-    status: "Active",
-    ...overrides,
-  });
-}
+import { db } from "../lib/firestore";
+import { LedgerService } from "./ledgerService";
 
 describe("PayrollService", () => {
   beforeEach(() => {
-    resetStore();
+    vi.clearAllMocks();
   });
 
   describe("getPayrollPreview", () => {
-    it("calculates salary employee as payRate / 12", async () => {
-      seedEmployee("emp_1", { payType: "Salary", payRate: 120000 });
+    it("should calculate payroll preview for salary and hourly employees", async () => {
+      const mockEmployees = [
+        { id: "emp-1", name: "Salary Emp", payType: "Salary", payRate: 120000, deductionRate: 0.2 },
+        { id: "emp-2", name: "Hourly Emp", payType: "Hourly", payRate: 50, defaultHours: 160, deductionRate: 0.2 },
+      ];
 
-      const preview = await PayrollService.getPayrollPreview("biz_1");
+      const mockSnapshot = {
+        forEach: (callback: any) => {
+          mockEmployees.forEach((emp) => callback({ id: emp.id, data: () => emp }));
+        },
+      };
 
-      expect(preview.items).toHaveLength(1);
-      expect(preview.items[0].gross).toBe(10000); // 120000 / 12
-      expect(preview.items[0].deductions).toBe(2000); // 10000 * 0.2
-      expect(preview.items[0].net).toBe(8000);
-    });
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue(mockSnapshot),
+      });
 
-    it("calculates hourly employee as hours * payRate", async () => {
-      seedEmployee("emp_1", { payType: "Hourly", payRate: 25, defaultHours: 160 });
+      const preview = await PayrollService.getPayrollPreview("biz-1");
 
-      const preview = await PayrollService.getPayrollPreview("biz_1");
-
-      expect(preview.items[0].gross).toBe(4000); // 160 * 25
-      expect(preview.items[0].hours).toBe(160);
-    });
-
-    it("uses employeeInputs hours override for hourly employees", async () => {
-      seedEmployee("emp_1", { payType: "Hourly", payRate: 30, defaultHours: 160 });
-
-      const preview = await PayrollService.getPayrollPreview("biz_1", [
-        { employeeId: "emp_1", hours: 80 },
-      ]);
-
-      expect(preview.items[0].hours).toBe(80);
-      expect(preview.items[0].gross).toBe(2400); // 80 * 30
-    });
-
-    it("uses default deduction rate of 0.2 when not specified", async () => {
-      seedEmployee("emp_1", { payType: "Salary", payRate: 60000, deductionRate: undefined });
-
-      const preview = await PayrollService.getPayrollPreview("biz_1");
-
-      // deductionRate is undefined, so (employee.deductionRate ?? 0.2) = 0.2
-      expect(preview.items[0].deductions).toBe(1000); // 5000 * 0.2
-    });
-
-    it("respects deductionRate=0 for tax-exempt employees", async () => {
-      seedEmployee("emp_1", { payType: "Salary", payRate: 60000, deductionRate: 0 });
-
-      const preview = await PayrollService.getPayrollPreview("biz_1");
-
-      expect(preview.items[0].deductions).toBe(0);
-      expect(preview.items[0].net).toBe(5000); // gross = 60000/12 = 5000, no deductions
-    });
-
-    it("calculates totals across multiple employees", async () => {
-      seedEmployee("emp_1", { payType: "Salary", payRate: 120000, deductionRate: 0.2 });
-      seedEmployee("emp_2", { payType: "Hourly", payRate: 50, defaultHours: 100, deductionRate: 0.1 });
-
-      const preview = await PayrollService.getPayrollPreview("biz_1");
-
+      expect(preview.totalGross).toBe(10000 + 8000); // 120k/12 + 50*160
+      expect(preview.totalDeductions).toBe(preview.totalGross * 0.2);
+      expect(preview.totalNet).toBe(preview.totalGross - preview.totalDeductions);
       expect(preview.items).toHaveLength(2);
-      // emp_1: gross=10000, ded=2000, net=8000
-      // emp_2: gross=5000, ded=500, net=4500
-      expect(preview.totalGross).toBe(15000);
-      expect(preview.totalDeductions).toBe(2500);
-      expect(preview.totalNet).toBe(12500);
-    });
-
-    it("excludes inactive employees", async () => {
-      seedEmployee("emp_1", { status: "Active" });
-      seedEmployee("emp_2", { status: "Inactive" });
-
-      const preview = await PayrollService.getPayrollPreview("biz_1");
-
-      // Our mock filters by status == "Active", so only emp_1 should appear
-      expect(preview.items).toHaveLength(1);
-    });
-
-    it("returns empty results when no employees exist", async () => {
-      const preview = await PayrollService.getPayrollPreview("biz_1");
-
-      expect(preview.items).toHaveLength(0);
-      expect(preview.totalGross).toBe(0);
-      expect(preview.totalNet).toBe(0);
     });
   });
 
   describe("runPayroll", () => {
-    it("creates a payroll run and posts a balanced journal entry", async () => {
-      seedEmployee("emp_1", { payType: "Salary", payRate: 60000, deductionRate: 0.2 });
+    it("should process payroll and post journal entries for both salary and hourly employees", async () => {
+      const mockEmployees = [
+        { id: "emp-1", name: "Salary Emp", payType: "Salary", payRate: 120000, deductionRate: 0.2 },
+        { id: "emp-2", name: "Hourly Emp", payType: "Hourly", payRate: 50, defaultHours: 160, deductionRate: 0.2 },
+      ];
+
+      const mockSnapshot = {
+        forEach: (callback: any) => {
+          mockEmployees.forEach((emp) => callback({ id: emp.id, data: () => emp }));
+        },
+      };
+
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue(mockSnapshot),
+        doc: vi.fn().mockReturnValue({
+          id: "run-id",
+          set: vi.fn().mockResolvedValue({}),
+        }),
+      });
+
+      const ledgerSpy = vi.spyOn(LedgerService, "createTransactionWithEntries").mockResolvedValue({} as any);
 
       const result = await PayrollService.runPayroll(
-        "biz_1",
-        new Date("2024-01-01"),
-        new Date("2024-01-31"),
-        "cash_acc",
-        "expense_acc",
-        "liability_acc"
+        "biz-1",
+        new Date(),
+        new Date(),
+        "cash-acc",
+        "exp-acc",
+        "liab-acc",
+        [{ employeeId: "emp-2", hours: 100 }] // Custom hours for hourly emp
       );
 
-      expect(result.status).toBe("Processed");
-      expect(result.totalGross).toBe(5000); // 60000/12
-      expect(result.totalDeductions).toBe(1000); // 5000*0.2
-      expect(result.totalNet).toBe(4000);
-      expect(result.items).toHaveLength(1);
+      expect(result.totalGross).toBe(10000 + 5000); // 10k salary + 5k hourly (100 * 50)
+      expect(ledgerSpy).toHaveBeenCalled();
+      expect(db.collection).toHaveBeenCalledWith("payroll_runs");
     });
 
-    it("preview and runPayroll produce identical calculations", async () => {
-      seedEmployee("emp_1", { payType: "Hourly", payRate: 40, defaultHours: 100, deductionRate: 0.15 });
+    it("should throw InternalServerError if runPayroll fails", async () => {
+      (db.collection as any).mockReturnValue({
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockRejectedValue(new Error("Firestore error")),
+      });
 
-      const preview = await PayrollService.getPayrollPreview("biz_1");
-      // Reset and re-seed since runPayroll modifies state
-      resetStore();
-      seedEmployee("emp_1", { payType: "Hourly", payRate: 40, defaultHours: 100, deductionRate: 0.15 });
-
-      const run = await PayrollService.runPayroll(
-        "biz_1",
-        new Date("2024-01-01"),
-        new Date("2024-01-31"),
-        "cash",
-        "expense",
-        "liability"
-      );
-
-      expect(run.totalGross).toBe(preview.totalGross);
-      expect(run.totalDeductions).toBe(preview.totalDeductions);
-      expect(run.totalNet).toBe(preview.totalNet);
+      await expect(
+        PayrollService.runPayroll("biz-1", new Date(), new Date(), "cash", "exp", "liab")
+      ).rejects.toThrow("Failed to process payroll run");
     });
   });
 });

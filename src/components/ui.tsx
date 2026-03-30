@@ -104,3 +104,41 @@ export const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean; o
     </div>
   );
 };
+
+export const LoadingSpinner = ({ className, size = "md" }: { className?: string; size?: "sm" | "md" | "lg" }) => {
+  const sizes = {
+    sm: "w-5 h-5 border-2",
+    md: "w-8 h-8 border-4",
+    lg: "w-12 h-12 border-4",
+  };
+  return (
+    <div className={cn("flex items-center justify-center p-8", className)}>
+      <div className={cn("border-indigo-200 border-t-indigo-600 rounded-full animate-spin", sizes[size])}></div>
+    </div>
+  );
+};
+
+export const EmptyState = ({ 
+  icon: Icon, 
+  title, 
+  description, 
+  action 
+}: { 
+  icon: React.ElementType; 
+  title: string; 
+  description: string; 
+  action?: { label: string; onClick: () => void } 
+}) => (
+  <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+      <Icon className="w-8 h-8 text-slate-400" />
+    </div>
+    <h3 className="text-lg font-semibold text-slate-900 mb-1">{title}</h3>
+    <p className="text-slate-500 max-w-xs mb-6">{description}</p>
+    {action && (
+      <Button onClick={action.onClick} variant="primary">
+        {action.label}
+      </Button>
+    )}
+  </div>
+);

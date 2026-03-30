@@ -1,13 +1,12 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../lib/firestore";
+import { validate } from "../middleware/validate";
+import { reportQuerySchema } from "../lib/validation";
 
 const router = Router();
 
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", validate(reportQuerySchema), async (req: Request, res: Response, next: NextFunction) => {
   const { businessId } = req.query;
-  if (!businessId) {
-    return res.status(400).json({ error: "businessId is required" });
-  }
   try {
     const snapshot = await db.collection("accounts")
       .where("businessId", "==", businessId)
@@ -16,7 +15,7 @@ router.get("/", async (req: Request, res: Response) => {
     const accounts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(accounts);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 

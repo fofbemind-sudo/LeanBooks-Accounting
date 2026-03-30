@@ -1,30 +1,33 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Plus, 
-  Search,
+  Search, 
   Loader2,
   Receipt,
+  Filter,
   RefreshCcw,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Inbox
 } from "lucide-react";
-import { Card, Button, Badge, Input, Select, Modal } from "../components/ui";
+import { Card, Button, Badge, Input, Select, Modal, LoadingSpinner, EmptyState } from "../components/ui";
 import { useAppContext } from "../app/providers";
 import { api } from "../api/client";
 import { format } from "date-fns";
 import { cn } from "../components/ui";
+import { toast } from "sonner";
+import { useTitle } from "../hooks/useTitle";
 
-export const TransactionsPage = () => {
+export const TransactionsPage = React.memo(() => {
+  useTitle("Transactions");
   const { business } = useAppContext();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [bankTransactions, setBankTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"ledger" | "bank">("ledger");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [filterSource, setFilterSource] = useState("all");
 
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -33,9 +36,9 @@ export const TransactionsPage = () => {
   const [drAccount, setDrAccount] = useState("");
   const [crAccount, setCrAccount] = useState("");
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
     if (!business) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const [txs, accs, btxs] = await Promise.all([
         api.getTransactions(business.id),
@@ -47,19 +50,30 @@ export const TransactionsPage = () => {
       setBankTransactions(btxs);
     } catch (error) {
       console.error("Error fetching transactions:", error);
+      toast.error("Failed to load transactions");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, [business]);
 
   useEffect(() => {
     fetchData();
-  }, [business]);
+  }, [fetchData]);
+
+  const isFormValid = useMemo(() => 
+    description && amount && date && drAccount && crAccount && drAccount !== crAccount,
+    [description, amount, date, drAccount, crAccount]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!business) return;
-    setLoading(true);
+    if (!isFormValid) {
+      toast.error("Please fill in all fields correctly. Debit and Credit accounts must be different.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       await api.createTransaction({
         businessId: business.id,
@@ -73,15 +87,16 @@ export const TransactionsPage = () => {
           { accountId: crAccount, debit: 0, credit: parseFloat(amount) }
         ]
       });
-      await fetchData();
+      toast.success("Transaction recorded successfully");
+      await fetchData(false);
       setIsTxModalOpen(false);
       setDescription("");
       setAmount("");
     } catch (error) {
       console.error("Error adding transaction:", error);
-      alert("Failed to save transaction. Check if debits and credits balance.");
+      toast.error("Failed to save transaction. Check if debits and credits balance.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -90,9 +105,11 @@ export const TransactionsPage = () => {
     setLoading(true);
     try {
       await api.autoMatch(business.id);
+      toast.success("Auto-matching completed");
       await fetchData();
     } catch (error) {
       console.error("Error auto-matching:", error);
+      toast.error("Auto-matching failed");
     } finally {
       setLoading(false);
     }
@@ -100,16 +117,9 @@ export const TransactionsPage = () => {
 
   const unmatchedCount = bankTransactions.filter(t => t.status === "unmatched").length;
 
-  const filteredTransactions = transactions.filter(tx => {
-    if (searchQuery && !tx.description?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (filterType !== "all" && tx.type !== filterType) return false;
-    if (filterSource !== "all" && tx.source !== filterSource) return false;
-    return true;
-  });
-
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Transactions</h1>
           <p className="text-slate-500">Manage your income, expenses, and bank reconciliation</p>
@@ -125,11 +135,11 @@ export const TransactionsPage = () => {
         </div>
       </div>
 
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
         <button 
           onClick={() => setActiveTab("ledger")}
           className={cn(
-            "px-6 py-3 text-sm font-medium transition-colors border-b-2",
+            "px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap",
             activeTab === "ledger" ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700"
           )}
         >
@@ -138,7 +148,7 @@ export const TransactionsPage = () => {
         <button 
           onClick={() => setActiveTab("bank")}
           className={cn(
-            "px-6 py-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2",
+            "px-6 py-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 whitespace-nowrap",
             activeTab === "bank" ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700"
           )}
         >
@@ -150,16 +160,16 @@ export const TransactionsPage = () => {
       <Modal isOpen={isTxModalOpen} onClose={() => setIsTxModalOpen(false)} title="New Transaction">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description <span className="text-rose-500">*</span></label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Monthly Rent" required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Amount</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Amount <span className="text-rose-500">*</span></label>
               <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Date <span className="text-rose-500">*</span></label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
             </div>
           </div>
@@ -174,78 +184,67 @@ export const TransactionsPage = () => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Debit Account (+)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Debit Account (+) <span className="text-rose-500">*</span></label>
               <Select value={drAccount} onChange={(e) => setDrAccount(e.target.value)} required>
                 <option value="">Select Account</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.type})</option>)}
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Credit Account (-)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Credit Account (-) <span className="text-rose-500">*</span></label>
               <Select value={crAccount} onChange={(e) => setCrAccount(e.target.value)} required>
                 <option value="">Select Account</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.type})</option>)}
               </Select>
             </div>
           </div>
+          {drAccount && crAccount && drAccount === crAccount && (
+            <p className="text-xs text-rose-500 font-medium">Debit and Credit accounts must be different.</p>
+          )}
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={() => setIsTxModalOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+            <Button type="submit" disabled={submitting || !isFormValid}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
               Save Transaction
             </Button>
           </div>
         </form>
       </Modal>
 
-      {activeTab === "ledger" ? (
-        <Card className="p-0">
-          <div className="p-4 border-b border-slate-100 flex gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input className="pl-10" placeholder="Search transactions..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+      {loading ? (
+        <Card className="p-12">
+          <LoadingSpinner />
+        </Card>
+      ) : activeTab === "ledger" ? (
+        transactions.length === 0 ? (
+          <EmptyState 
+            icon={Inbox}
+            title="No transactions yet"
+            description="Start by recording your first transaction manually or syncing your bank account."
+            action={{ label: "Add Transaction", onClick: () => setIsTxModalOpen(true) }}
+          />
+        ) : (
+          <Card className="p-0">
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input className="pl-10" placeholder="Search transactions..." />
+              </div>
+              <Button variant="outline"><Filter className="w-4 h-4 mr-2" /> Filter</Button>
             </div>
-            <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-36">
-              <option value="all">All Types</option>
-              <option value="Income">Income</option>
-              <option value="Expense">Expense</option>
-              <option value="Transfer">Transfer</option>
-              <option value="Adjustment">Adjustment</option>
-            </Select>
-            <Select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="w-36">
-              <option value="all">All Sources</option>
-              <option value="manual">Manual</option>
-              <option value="payroll">Payroll</option>
-              <option value="stripe">Stripe</option>
-              <option value="bank">Bank</option>
-            </Select>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type / Source</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-500" />
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type / Source</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   </tr>
-                ) : filteredTransactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                      {transactions.length === 0 ? "No transactions found." : "No transactions match your filters."}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredTransactions.map((tx) => (
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {transactions.map((tx) => (
                     <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4 text-sm text-slate-600">{tx.date?.toDate ? format(tx.date.toDate(), "MMM dd, yyyy") : tx.date}</td>
                       <td className="px-6 py-4">
@@ -268,47 +267,42 @@ export const TransactionsPage = () => {
                         </Badge>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : (
-        <Card className="p-0">
-          <div className="p-4 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-amber-800 text-sm font-medium">
-              <AlertCircle className="w-4 h-4" />
-              {unmatchedCount} unmatched bank transactions found.
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <p className="text-xs text-amber-700">Auto-match will attempt to link these to existing ledger entries based on amount and date.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Bank Description</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-500" />
-                    </td>
+          </Card>
+        )
+      ) : (
+        bankTransactions.length === 0 ? (
+          <EmptyState 
+            icon={RefreshCcw}
+            title="No bank data"
+            description="Connect your bank account to start reconciling your transactions."
+            action={{ label: "Sync Bank", onClick: () => api.syncBank(business!.id).then(() => fetchData()) }}
+          />
+        ) : (
+          <Card className="p-0">
+            <div className="p-4 bg-amber-50 border-b border-amber-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-amber-800 text-sm font-medium">
+                <AlertCircle className="w-4 h-4" />
+                {unmatchedCount} unmatched bank transactions found.
+              </div>
+              <p className="text-xs text-amber-700">Auto-match will attempt to link these to existing ledger entries based on amount and date.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Bank Description</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Action</th>
                   </tr>
-                ) : bankTransactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                      No bank transactions imported.
-                    </td>
-                  </tr>
-                ) : (
-                  bankTransactions.map((btx) => (
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {bankTransactions.map((btx) => (
                     <tr key={btx.id} className={cn("hover:bg-slate-50/50 transition-colors", btx.status === "unmatched" && "bg-amber-50/20")}>
                       <td className="px-6 py-4 text-sm text-slate-600">{btx.date?.toDate ? format(btx.date.toDate(), "MMM dd, yyyy") : btx.date}</td>
                       <td className="px-6 py-4 font-medium text-slate-800">{btx.description}</td>
@@ -330,13 +324,13 @@ export const TransactionsPage = () => {
                         )}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )
       )}
     </div>
   );
-};
+});
