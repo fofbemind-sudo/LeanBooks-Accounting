@@ -31,7 +31,8 @@ export class PayrollService {
         gross = hours * employee.payRate;
       }
 
-      const deductions = gross * (employee.deductionRate || 0.2);
+      const deductionRate = employee.deductionRate ?? 0.2;
+      const deductions = gross * deductionRate;
       const net = gross - deductions;
 
       totalGross += gross;
@@ -66,10 +67,10 @@ export class PayrollService {
     employeesSnapshot.forEach(doc => {
       const employee = doc.data() as Employee;
       const input = employeeInputs.find(i => i.employeeId === doc.id);
-      
+
       let gross = 0;
       let hours = 0;
-      
+
       if (employee.payType === "Salary") {
         gross = employee.payRate / 12; // Monthly assumption
       } else {
@@ -77,7 +78,8 @@ export class PayrollService {
         gross = hours * employee.payRate;
       }
 
-      const deductions = gross * (employee.deductionRate || 0.2);
+      const deductionRate = employee.deductionRate ?? 0.2;
+      const deductions = gross * deductionRate;
       const net = gross - deductions;
 
       totalGross += gross;

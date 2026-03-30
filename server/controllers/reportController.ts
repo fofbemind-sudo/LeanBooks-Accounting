@@ -7,11 +7,16 @@ export class ReportController {
     if (!businessId || !startDate || !endDate) {
       return res.status(400).json({ error: "Missing required parameters: businessId, startDate, endDate" });
     }
+    const start = new Date(startDate as string);
+    const end = new Date(endDate as string);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: "Invalid date format for startDate or endDate" });
+    }
     try {
       const pnl = await ReportService.getProfitAndLoss(
         businessId as string,
-        new Date(startDate as string),
-        new Date(endDate as string)
+        start,
+        end
       );
       res.json(pnl);
     } catch (error: any) {
@@ -24,10 +29,14 @@ export class ReportController {
     if (!businessId || !date) {
       return res.status(400).json({ error: "Missing required parameters: businessId, date" });
     }
+    const asOfDate = new Date(date as string);
+    if (isNaN(asOfDate.getTime())) {
+      return res.status(400).json({ error: "Invalid date format" });
+    }
     try {
       const bs = await ReportService.getBalanceSheet(
         businessId as string,
-        new Date(date as string)
+        asOfDate
       );
       res.json(bs);
     } catch (error: any) {
@@ -40,11 +49,16 @@ export class ReportController {
     if (!businessId || !startDate || !endDate) {
       return res.status(400).json({ error: "Missing required parameters: businessId, startDate, endDate" });
     }
+    const start = new Date(startDate as string);
+    const end = new Date(endDate as string);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: "Invalid date format for startDate or endDate" });
+    }
     try {
       const cf = await ReportService.getCashFlow(
         businessId as string,
-        new Date(startDate as string),
-        new Date(endDate as string)
+        start,
+        end
       );
       res.json(cf);
     } catch (error: any) {
@@ -57,10 +71,14 @@ export class ReportController {
     if (!businessId || !date) {
       return res.status(400).json({ error: "Missing required parameters: businessId, date" });
     }
+    const asOfDate = new Date(date as string);
+    if (isNaN(asOfDate.getTime())) {
+      return res.status(400).json({ error: "Invalid date format" });
+    }
     try {
       const cash = await ReportService.getCashBalance(
         businessId as string,
-        new Date(date as string)
+        asOfDate
       );
       res.json(cash);
     } catch (error: any) {

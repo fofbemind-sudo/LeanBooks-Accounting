@@ -22,7 +22,7 @@ export class ReconciliationService {
       
       // Heuristic: Match by amount and date within 3 days
       const match = ledgerTxs.find(ltx => {
-        const amountMatch = Math.abs(ltx.amount) === Math.abs(bankTx.amount);
+        const amountMatch = Math.abs(Math.abs(ltx.amount) - Math.abs(bankTx.amount)) < 0.01;
         const dateDiff = Math.abs(ltx.date.toDate().getTime() - bankTx.date.toDate().getTime());
         const threeDays = 3 * 24 * 60 * 60 * 1000;
         return amountMatch && dateDiff <= threeDays;

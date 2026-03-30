@@ -20,7 +20,7 @@ export class EmployeeController {
         payType,
         payRate,
         defaultHours: defaultHours || 160,
-        deductionRate: deductionRate || 0.2,
+        deductionRate: deductionRate ?? 0.2,
         status: "Active",
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
