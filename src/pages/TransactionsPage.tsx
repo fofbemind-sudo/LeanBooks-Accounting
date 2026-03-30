@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { 
   Plus, 
-  Search, 
+  Search,
   Loader2,
   Receipt,
-  Filter,
   RefreshCcw,
   CheckCircle2,
   AlertCircle
@@ -23,6 +22,9 @@ export const TransactionsPage = () => {
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"ledger" | "bank">("ledger");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterSource, setFilterSource] = useState("all");
 
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -97,6 +99,13 @@ export const TransactionsPage = () => {
   };
 
   const unmatchedCount = bankTransactions.filter(t => t.status === "unmatched").length;
+
+  const filteredTransactions = transactions.filter(tx => {
+    if (searchQuery && !tx.description?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterType !== "all" && tx.type !== filterType) return false;
+    if (filterSource !== "all" && tx.source !== filterSource) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-8">
@@ -191,12 +200,25 @@ export const TransactionsPage = () => {
 
       {activeTab === "ledger" ? (
         <Card className="p-0">
-          <div className="p-4 border-b border-slate-100 flex gap-4">
-            <div className="relative flex-1">
+          <div className="p-4 border-b border-slate-100 flex gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input className="pl-10" placeholder="Search transactions..." />
+              <Input className="pl-10" placeholder="Search transactions..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
-            <Button variant="outline"><Filter className="w-4 h-4 mr-2" /> Filter</Button>
+            <Select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-36">
+              <option value="all">All Types</option>
+              <option value="Income">Income</option>
+              <option value="Expense">Expense</option>
+              <option value="Transfer">Transfer</option>
+              <option value="Adjustment">Adjustment</option>
+            </Select>
+            <Select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="w-36">
+              <option value="all">All Sources</option>
+              <option value="manual">Manual</option>
+              <option value="payroll">Payroll</option>
+              <option value="stripe">Stripe</option>
+              <option value="bank">Bank</option>
+            </Select>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -216,14 +238,14 @@ export const TransactionsPage = () => {
                       <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-500" />
                     </td>
                   </tr>
-                ) : transactions.length === 0 ? (
+                ) : filteredTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                      No transactions found.
+                      {transactions.length === 0 ? "No transactions found." : "No transactions match your filters."}
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((tx) => (
+                  filteredTransactions.map((tx) => (
                     <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4 text-sm text-slate-600">{tx.date?.toDate ? format(tx.date.toDate(), "MMM dd, yyyy") : tx.date}</td>
                       <td className="px-6 py-4">

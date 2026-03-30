@@ -6,6 +6,9 @@ import { DashboardPage } from "../pages/DashboardPage";
 import { TransactionsPage } from "../pages/TransactionsPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { PayrollPage } from "../pages/PayrollPage";
+import { ContactsPage } from "../pages/ContactsPage";
+import { InvoicesPage } from "../pages/InvoicesPage";
+import { BillsPage } from "../pages/BillsPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { LoginPage } from "../pages/LoginPage";
 import { Loader2 } from "lucide-react";
@@ -38,6 +41,9 @@ export const AppRouter = () => {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/contacts" element={<ContactsPage />} />
+          <Route path="/invoices" element={<InvoicesPage />} />
+          <Route path="/bills" element={<BillsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/payroll" element={<PayrollPage />} />
           <Route path="/settings" element={<SettingsPage />} />

@@ -66,6 +66,40 @@ export class ReportController {
     }
   }
 
+  static async getTrialBalance(req: Request, res: Response) {
+    const { businessId, date } = req.query;
+    if (!businessId || !date) {
+      return res.status(400).json({ error: "Missing required parameters: businessId, date" });
+    }
+    try {
+      const tb = await ReportService.getTrialBalance(
+        businessId as string,
+        new Date(date as string)
+      );
+      res.json(tb);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async getGeneralLedger(req: Request, res: Response) {
+    const { businessId, startDate, endDate, accountId } = req.query;
+    if (!businessId || !startDate || !endDate) {
+      return res.status(400).json({ error: "Missing required parameters: businessId, startDate, endDate" });
+    }
+    try {
+      const gl = await ReportService.getGeneralLedger(
+        businessId as string,
+        new Date(startDate as string),
+        new Date(endDate as string),
+        accountId as string | undefined
+      );
+      res.json(gl);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   static async getCashBalance(req: Request, res: Response) {
     const { businessId, date } = req.query;
     if (!businessId || !date) {

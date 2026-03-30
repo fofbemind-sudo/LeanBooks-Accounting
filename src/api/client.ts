@@ -1,4 +1,4 @@
-import { Business, Account, Transaction, Employee, PayrollRun, BankTransaction } from "../types";
+import { Business, Account, Transaction, Employee, PayrollRun, BankTransaction, Contact, Invoice, Bill } from "../types";
 import { auth } from "../firebase";
 
 const API_BASE = "/api";
@@ -95,6 +95,14 @@ export const api = {
     fetch(`${API_BASE}/reports/cash-balance?businessId=${businessId}&date=${date}`, {
       headers: await getHeaders()
     }).then(r => r.json()),
+  getTrialBalance: async (businessId: string, date: string): Promise<any> =>
+    fetch(`${API_BASE}/reports/trial-balance?businessId=${businessId}&date=${date}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+  getGeneralLedger: async (businessId: string, startDate: string, endDate: string, accountId?: string): Promise<any> =>
+    fetch(`${API_BASE}/reports/general-ledger?businessId=${businessId}&startDate=${startDate}&endDate=${endDate}${accountId ? `&accountId=${accountId}` : ""}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
 
   // Integrations
   syncStripe: async (data: any): Promise<any> =>
@@ -115,6 +123,104 @@ export const api = {
     }).then(r => r.json()),
   autoMatch: async (businessId: string): Promise<any> =>
     fetch(`${API_BASE}/integrations/reconciliation/auto-match`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify({ businessId })
+    }).then(r => r.json()),
+
+  // Contacts
+  getContacts: async (businessId: string, type?: string): Promise<Contact[]> =>
+    fetch(`${API_BASE}/contacts?businessId=${businessId}${type ? `&type=${type}` : ""}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+  createContact: async (data: any): Promise<Contact> =>
+    fetch(`${API_BASE}/contacts`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  updateContact: async (id: string, data: any): Promise<Contact> =>
+    fetch(`${API_BASE}/contacts/${id}`, {
+      method: "PUT",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+
+  // Invoices
+  getInvoices: async (businessId: string, status?: string): Promise<Invoice[]> =>
+    fetch(`${API_BASE}/invoices?businessId=${businessId}${status ? `&status=${status}` : ""}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+  createInvoice: async (data: any): Promise<Invoice> =>
+    fetch(`${API_BASE}/invoices`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  sendInvoice: async (data: any): Promise<Invoice> =>
+    fetch(`${API_BASE}/invoices/send`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  recordInvoicePayment: async (data: any): Promise<Invoice> =>
+    fetch(`${API_BASE}/invoices/payment`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  getInvoiceAging: async (businessId: string): Promise<any> =>
+    fetch(`${API_BASE}/invoices/aging?businessId=${businessId}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+
+  // Bills
+  getBills: async (businessId: string, status?: string): Promise<Bill[]> =>
+    fetch(`${API_BASE}/bills?businessId=${businessId}${status ? `&status=${status}` : ""}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+  createBill: async (data: any): Promise<Bill> =>
+    fetch(`${API_BASE}/bills`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  approveBill: async (data: any): Promise<Bill> =>
+    fetch(`${API_BASE}/bills/approve`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  recordBillPayment: async (data: any): Promise<Bill> =>
+    fetch(`${API_BASE}/bills/payment`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  getBillAging: async (businessId: string): Promise<any> =>
+    fetch(`${API_BASE}/bills/aging?businessId=${businessId}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+
+  // Recurring Invoices
+  getRecurringInvoices: async (businessId: string): Promise<any[]> =>
+    fetch(`${API_BASE}/recurring-invoices?businessId=${businessId}`, {
+      headers: await getHeaders()
+    }).then(r => r.json()),
+  createRecurringInvoice: async (data: any): Promise<any> =>
+    fetch(`${API_BASE}/recurring-invoices`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  toggleRecurringInvoice: async (data: any): Promise<any> =>
+    fetch(`${API_BASE}/recurring-invoices/toggle`, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify(data)
+    }).then(r => r.json()),
+  processRecurringInvoices: async (businessId: string): Promise<any> =>
+    fetch(`${API_BASE}/recurring-invoices/process`, {
       method: "POST",
       headers: await getHeaders(),
       body: JSON.stringify({ businessId })
